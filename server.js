@@ -676,14 +676,10 @@ function buildWcMatchIndex(products) {
   return { bySku, byName };
 }
 
-async function runWcPreview(onProgress) {
-  const wc = await getWooConfig();
-  if (!wc.site_url || !wc.consumer_key || !wc.consumer_secret) {
-    const err = new Error('WooCommerce is not configured yet.');
-    err.status = 400;
-    throw err;
-  }
-  const wcProducts = await fetchAllWcProducts(wc, onProgress);
+// Match a WooCommerce product list against the POS catalog. Pure function
+// of the list — used both by the server-side job and by the browser-side
+// flow (preview-data), which sends the list it fetched itself.
+async function matchWcProducts(wcProducts) {
   const posProducts = await store.listProducts();
   const { bySku, byName } = buildWcMatchIndex(posProducts);
 
@@ -721,6 +717,17 @@ async function runWcPreview(onProgress) {
       pos_only_count: posOnly.length,
     },
   };
+}
+
+async function runWcPreview(onProgress) {
+  const wc = await getWooConfig();
+  if (!wc.site_url || !wc.consumer_key || !wc.consumer_secret) {
+    const err = new Error('WooCommerce is not configured yet.');
+    err.status = 400;
+    throw err;
+  }
+  const wcProducts = await fetchAllWcProducts(wc, onProgress);
+  return matchWcProducts(wcProducts);
 }
 
 // WooCommerce Preview/Import run as background jobs: fetching every WC
@@ -774,6 +781,57 @@ app.post('/api/manage/woocommerce/import', authMiddleware, managerMiddleware, as
     .then((result) => { job.status = 'done'; job.result = result; })
     .catch((err) => { job.status = 'error'; job.error = err.message || 'server_error'; });
   return res.json({ job_id: job.id, status: 'running' });
+});
+
+// ---------- browser-side WooCommerce (primary path) ----------
+// The Render server sits in a country the WP host geo-blocks ("Your
+// country is blocked" → 302 to /block.html), so server-side WC fetches
+// fail even though the key works. The manager's browser in Myanmar is
+// allowed in, so the browser fetches WooCommerce directly and sends the
+// product list here for matching / applying. The key is handed only to
+// the manager session, over HTTPS, and lives in browser memory only —
+// never stored in the browser. (The server-side jobs above stay as a
+// fallback for a future host that is not geo-blocked.)
+app.get('/api/manage/woocommerce/credentials', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try {
+    const wc = await getWooConfig();
+    if (!wc.site_url || !wc.consumer_key || !wc.consumer_secret) {
+      return res.status(400).json({ error: 'woocommerce_not_configured' });
+    }
+    return res.json({ site_url: wc.site_url, consumer_key: wc.consumer_key, consumer_secret: wc.consumer_secret });
+  } catch (err) { return next(err); }
+});
+
+app.post('/api/manage/woocommerce/preview-data', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const wcProducts = req.body && Array.isArray(req.body.wc_products) ? req.body.wc_products : null;
+    if (!wcProducts) return res.status(400).json({ error: 'wc_products_required' });
+    return res.json(await matchWcProducts(wcProducts));
+  } catch (err) { return next(err); }
+});
+
+app.post('/api/manage/woocommerce/import-data', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const matched = req.body && Array.isArray(req.body.matched) ? req.body.matched : null;
+    if (!matched) return res.status(400).json({ error: 'matched_required' });
+    let updated = 0;
+    let alreadyHadImage = 0;
+    const matchedIds = new Set();
+    for (const m of matched) {
+      if (!m || !m.product_id) continue;
+      matchedIds.add(m.product_id);
+      const p = await store.getProduct(m.product_id);
+      if (!p) continue;
+      if (p.image_url) { alreadyHadImage++; continue; }
+      if (m.wc_image) p.image_url = m.wc_image;
+      if (m.wc_id) p.wc_id = m.wc_id;
+      await store.saveProduct(p);
+      updated++;
+    }
+    const posProducts = await store.listProducts();
+    const posOnlyKept = posProducts.filter((p) => !matchedIds.has(p.id)).length;
+    return res.json({ updated, already_had_image: alreadyHadImage, pos_only_kept: posOnlyKept });
+  } catch (err) { return next(err); }
 });
 
 // ---------- static / SPA fallback ----------
