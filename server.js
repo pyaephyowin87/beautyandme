@@ -637,7 +637,7 @@ async function fetchWcPage(wc, page, perPage) {
   let lastErr = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await wcFetch(wc, `products?per_page=${perPage}&page=${page}`, 60000);
+      const res = await wcFetch(wc, `products?per_page=${perPage}&page=${page}&_fields=id,name,sku,price,images`, 60000);
       if (!res.ok) throw new Error(`WooCommerce replied HTTP ${res.status} on page ${page}`);
       return res;
     } catch (err) {
@@ -648,15 +648,17 @@ async function fetchWcPage(wc, page, perPage) {
   throw lastErr;
 }
 
-async function fetchAllWcProducts(wc) {
+async function fetchAllWcProducts(wc, onProgress) {
   const perPage = 50;
   const first = await fetchWcPage(wc, 1, perPage);
   const totalPages = parseInt(first.headers.get('x-wp-totalpages') || '1', 10) || 1;
   const all = await first.json();
+  if (onProgress) onProgress(1, totalPages);
   for (let page = 2; page <= totalPages; page++) {
     await new Promise((r) => setTimeout(r, 500));
     const res = await fetchWcPage(wc, page, perPage);
     all.push(...await res.json());
+    if (onProgress) onProgress(page, totalPages);
   }
   return all;
 }
@@ -674,14 +676,14 @@ function buildWcMatchIndex(products) {
   return { bySku, byName };
 }
 
-async function runWcPreview() {
+async function runWcPreview(onProgress) {
   const wc = await getWooConfig();
   if (!wc.site_url || !wc.consumer_key || !wc.consumer_secret) {
     const err = new Error('WooCommerce is not configured yet.');
     err.status = 400;
     throw err;
   }
-  const wcProducts = await fetchAllWcProducts(wc);
+  const wcProducts = await fetchAllWcProducts(wc, onProgress);
   const posProducts = await store.listProducts();
   const { bySku, byName } = buildWcMatchIndex(posProducts);
 
@@ -721,18 +723,37 @@ async function runWcPreview() {
   };
 }
 
-app.post('/api/manage/woocommerce/preview', authMiddleware, managerMiddleware, async (_req, res, next) => {
-  try {
-    return res.json(await runWcPreview());
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ error: err.message });
-    return next(err);
-  }
+// WooCommerce Preview/Import run as background jobs: fetching every WC
+// product can take minutes on a slow host, far longer than a single HTTP
+// request is allowed to stay open (the proxy answers with an HTML error
+// page when it gives up). The browser starts a job and polls for it.
+const wooJobs = new Map();
+let wooJobSeq = 0;
+function createWooJob(kind) {
+  const id = `woo-${Date.now().toString(36)}-${++wooJobSeq}`;
+  const job = { id, kind, status: 'running', progress: null, result: null, error: null, started_at: new Date().toISOString() };
+  wooJobs.set(id, job);
+  return job;
+}
+
+app.post('/api/manage/woocommerce/preview', authMiddleware, managerMiddleware, async (_req, res) => {
+  const job = createWooJob('preview');
+  runWcPreview((page, totalPages) => { job.progress = { page, total_pages: totalPages }; })
+    .then((result) => { job.status = 'done'; job.result = result; })
+    .catch((err) => { job.status = 'error'; job.error = err.message || 'server_error'; });
+  return res.json({ job_id: job.id, status: 'running' });
 });
 
-app.post('/api/manage/woocommerce/import', authMiddleware, managerMiddleware, async (_req, res, next) => {
-  try {
-    const preview = await runWcPreview();
+app.get('/api/manage/woocommerce/jobs/:id', authMiddleware, managerMiddleware, (req, res) => {
+  const job = wooJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'job_not_found' });
+  return res.json(job);
+});
+
+app.post('/api/manage/woocommerce/import', authMiddleware, managerMiddleware, async (_req, res) => {
+  const job = createWooJob('import');
+  (async () => {
+    const preview = await runWcPreview((page, totalPages) => { job.progress = { page, total_pages: totalPages, phase: 'fetch' }; });
     let updated = 0;
     let alreadyHadImage = 0;
     for (const m of preview.matched) {
@@ -744,15 +765,15 @@ app.post('/api/manage/woocommerce/import', authMiddleware, managerMiddleware, as
       await store.saveProduct(p);
       updated++;
     }
-    return res.json({
+    return {
       updated,
       already_had_image: alreadyHadImage,
       pos_only_kept: preview.totals.pos_only_count,
-    });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ error: err.message });
-    return next(err);
-  }
+    };
+  })()
+    .then((result) => { job.status = 'done'; job.result = result; })
+    .catch((err) => { job.status = 'error'; job.error = err.message || 'server_error'; });
+  return res.json({ job_id: job.id, status: 'running' });
 });
 
 // ---------- static / SPA fallback ----------
