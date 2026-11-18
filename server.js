@@ -119,7 +119,11 @@ async function wcFetch(wc, endpoint, timeoutMs) {
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
-      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
       signal: ctrl.signal,
     });
     return res;
@@ -627,18 +631,31 @@ app.post('/api/manage/woocommerce/test', authMiddleware, managerMiddleware, asyn
   } catch (err) { return next(err); }
 });
 
-async function fetchAllWcProducts(wc) {
-  const first = await wcFetch(wc, 'products?per_page=100&page=1', 30000);
-  if (!first.ok) {
-    const err = new Error(`WooCommerce replied HTTP ${first.status}`);
-    err.status = first.status;
-    throw err;
+// One WC products page, with retries: the WP host / Cloudflare sometimes
+// drops or slow-responds to a single request even when the API key works.
+async function fetchWcPage(wc, page, perPage) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await wcFetch(wc, `products?per_page=${perPage}&page=${page}`, 60000);
+      if (!res.ok) throw new Error(`WooCommerce replied HTTP ${res.status} on page ${page}`);
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
+    }
   }
+  throw lastErr;
+}
+
+async function fetchAllWcProducts(wc) {
+  const perPage = 50;
+  const first = await fetchWcPage(wc, 1, perPage);
   const totalPages = parseInt(first.headers.get('x-wp-totalpages') || '1', 10) || 1;
   const all = await first.json();
   for (let page = 2; page <= totalPages; page++) {
-    const res = await wcFetch(wc, `products?per_page=100&page=${page}`, 30000);
-    if (!res.ok) throw new Error(`WooCommerce replied HTTP ${res.status} on page ${page}`);
+    await new Promise((r) => setTimeout(r, 500));
+    const res = await fetchWcPage(wc, page, perPage);
     all.push(...await res.json());
   }
   return all;
