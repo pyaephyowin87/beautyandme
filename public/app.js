@@ -1147,14 +1147,33 @@ async function renderManageWoo(body) {
       $('#wooMsg').textContent = (r.ok ? t('wc_test_ok') : t('wc_test_fail')) + (r.message ? ' — ' + r.message : '');
     } catch (e) { $('#wooMsg').textContent = t('wc_test_fail'); }
   });
+  // Start a WooCommerce job, then poll every 2s until it finishes.
+  // Each poll is a fast request, so a slow WC fetch can take minutes
+  // without the browser giving up on the request.
+  async function pollWooJob(jobId) {
+    const started = Date.now();
+    for (;;) {
+      const job = await api('/manage/woocommerce/jobs/' + encodeURIComponent(jobId));
+      if (job.progress && job.progress.total_pages) {
+        $('#wooMsg').textContent = t('loading') + ' (' + job.progress.page + '/' + job.progress.total_pages + ')';
+      }
+      if (job.status === 'done') return job.result;
+      if (job.status === 'error') throw new Error(job.error || 'server_error');
+      if (Date.now() - started > 10 * 60 * 1000) throw new Error('timed out — please try again');
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
   $('#wooPreview').addEventListener('click', async () => {
     $('#wooMsg').textContent = t('loading');
     try {
-      const r = await api('/manage/woocommerce/preview', { method: 'POST', body: JSON.stringify({}) });
+      const started = await api('/manage/woocommerce/preview', { method: 'POST', body: JSON.stringify({}) });
+      const r = await pollWooJob(started.job_id);
       $('#wooMsg').textContent = '';
+      const matchedN = (r.totals && r.totals.matched_count) || (Array.isArray(r.matched) ? r.matched.length : r.matched) || '—';
+      const posOnlyN = (r.totals && r.totals.pos_only_count) || (Array.isArray(r.pos_only) ? r.pos_only.length : r.pos_only) || '—';
       $('#wooResult').innerHTML = '<table class="mg-table"><tbody>' +
-        '<tr><td>' + esc(t('matched')) + '</td><td><strong>' + esc(String(r.matched != null ? r.matched : (r.totals && r.totals.matched) || '—')) + '</strong></td></tr>' +
-        '<tr><td>' + esc(t('pos_only')) + '</td><td><strong>' + esc(String(r.pos_only != null ? r.pos_only : (r.totals && r.totals.pos_only) || '—')) + '</strong></td></tr>' +
+        '<tr><td>' + esc(t('matched')) + '</td><td><strong>' + esc(String(matchedN)) + '</strong></td></tr>' +
+        '<tr><td>' + esc(t('pos_only')) + '</td><td><strong>' + esc(String(posOnlyN)) + '</strong></td></tr>' +
         '<tr><td>' + esc(t('wc_only')) + '</td><td><strong>' + esc(String(r.wc_only_count != null ? r.wc_only_count : (r.totals && r.totals.wc_only_count) || '—')) + '</strong></td></tr>' +
         '</tbody></table>';
     } catch (e) { $('#wooMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
@@ -1163,7 +1182,8 @@ async function renderManageWoo(body) {
     if (!window.confirm(t('confirm_import'))) return;
     $('#wooMsg').textContent = t('loading');
     try {
-      const r = await api('/manage/woocommerce/import', { method: 'POST', body: JSON.stringify({}) });
+      const started = await api('/manage/woocommerce/import', { method: 'POST', body: JSON.stringify({}) });
+      const r = await pollWooJob(started.job_id);
       $('#wooMsg').textContent = t('saved');
       $('#wooResult').innerHTML = '<pre style="white-space:pre-wrap;font-size:13px">' + esc(JSON.stringify(r, null, 2)) + '</pre>';
       loadBrands(); loadHomeGrid(true);
