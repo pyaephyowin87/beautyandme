@@ -433,8 +433,25 @@ async function loadShopGrid(reset) {
 }
 
 /* ---------------- product detail ---------------- */
-function openOverlay(ov, modal) { $(ov).hidden = false; $(modal).hidden = false; }
-function closeOverlay(ov, modal) { $(ov).hidden = true; $(modal).hidden = true; }
+let layerZ = 100;
+const openLayers = []; // [{ov, modal}] — topmost layer is last
+function openOverlay(ov, modal) {
+  layerZ += 2;
+  $(ov).style.zIndex = layerZ;
+  $(modal).style.zIndex = layerZ + 1;
+  $(ov).hidden = false; $(modal).hidden = false;
+  openLayers.push({ ov, modal });
+}
+function closeOverlay(ov, modal) {
+  $(ov).hidden = true; $(modal).hidden = true;
+  $(ov).style.zIndex = ''; $(modal).style.zIndex = '';
+  const i = openLayers.findIndex((l) => l.ov === ov);
+  if (i >= 0) openLayers.splice(i, 1);
+}
+function closeTopLayer() {
+  const top = openLayers[openLayers.length - 1];
+  if (top) closeOverlay(top.ov, top.modal);
+}
 
 async function openProduct(id) {
   openOverlay('#detailOverlay', '#detailModal');
@@ -1168,20 +1185,21 @@ function wire() {
   });
   $('#cartBtn').addEventListener('click', openCart);
   $('#cartClose').addEventListener('click', closeCart);
-  $('#cartOverlay').addEventListener('click', closeCart);
+  $('#cartOverlay').addEventListener('click', (ev) => { if (ev.target === $('#cartOverlay')) closeCart(); });
   $('#authBtn').addEventListener('click', () => {
     if (state.user) { if (window.confirm(t('logout') + '?')) logout(); }
     else openAuth();
   });
   $('#authClose').addEventListener('click', closeAuth);
-  $('#authOverlay').addEventListener('click', closeAuth);
+  $('#authOverlay').addEventListener('click', (ev) => { if (ev.target === $('#authOverlay')) closeAuth(); });
   $$('#authTabs .tab').forEach((b) => b.addEventListener('click', () => setAuthTab(b.dataset.atab)));
   $('#authSubmit').addEventListener('click', submitAuth);
   $('#authPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAuth(); });
   $('#detailClose').addEventListener('click', () => closeOverlay('#detailOverlay', '#detailModal'));
-  $('#detailOverlay').addEventListener('click', () => closeOverlay('#detailOverlay', '#detailModal'));
+  $('#detailOverlay').addEventListener('click', (ev) => { if (ev.target === $('#detailOverlay')) closeOverlay('#detailOverlay', '#detailModal'); });
   $('#orderClose').addEventListener('click', () => closeOverlay('#orderOverlay', '#orderModal'));
-  $('#orderOverlay').addEventListener('click', () => closeOverlay('#orderOverlay', '#orderModal'));
+  $('#orderOverlay').addEventListener('click', (ev) => { if (ev.target === $('#orderOverlay')) closeOverlay('#orderOverlay', '#orderModal'); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopLayer(); });
   $('#couponApplyBtn').addEventListener('click', applyCoupon);
   $('#couponInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyCoupon(); });
   $('#checkoutBtn').addEventListener('click', () => { if (state.cart.length) openCheckout(); });

@@ -22,6 +22,7 @@ a{color:var(--purple)}
 h1,h2,h3{margin:0}
 .center{text-align:center}
 .hidden{display:none!important}
+[hidden]{display:none!important}
 
 /* ---------- Header ---------- */
 .app-header{
