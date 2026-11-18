@@ -54,6 +54,7 @@ const I18N = {
     wc_warn: 'key ကို chat မှာ ဘယ်တော့မှ မပို့ပါနဲ့',
     wc_configured: 'WooCommerce ချိတ်ပြီးပါပြီ', wc_not_configured: 'WooCommerce မချိတ်ရသေးပါ',
     wc_test_ok: 'ချိတ်ဆက်မှု အောင်မြင်ပါတယ်', wc_test_fail: 'ချိတ်ဆက်မှု မအောင်မြင်ပါ',
+    woo_preview_first: 'အရင် Preview နှိပ်ပါ', woo_browser_blocked: 'ဘရောင်ဇာက WooCommerce ကို ဆက်သွယ်လို့ မရပါ',
     new_key: 'အသစ် key (ပြောင်းချင်မှ ဖြည့်ပါ)', new_secret: 'အသစ် secret (ပြောင်းချင်မှ ဖြည့်ပါ)',
     site_url: 'Site URL', consumer_key: 'Consumer Key', consumer_secret: 'Consumer Secret',
     matched: 'ကိုက်ညီသော ပစ္စည်း', pos_only: 'POS မှာသာ ရှိသော ပစ္စည်း', wc_only: 'WooCommerce မှာသာ ရှိသော ပစ္စည်း',
@@ -115,6 +116,7 @@ const I18N = {
     wc_warn: 'Never send your key in chat',
     wc_configured: 'WooCommerce connected', wc_not_configured: 'WooCommerce not connected yet',
     wc_test_ok: 'Connection successful', wc_test_fail: 'Connection failed',
+    woo_preview_first: 'Run Preview first', woo_browser_blocked: 'Browser could not reach WooCommerce',
     new_key: 'New key (only if changing)', new_secret: 'New secret (only if changing)',
     site_url: 'Site URL', consumer_key: 'Consumer Key', consumer_secret: 'Consumer Secret',
     matched: 'Matched products', pos_only: 'POS-only products', wc_only: 'WooCommerce-only products',
@@ -1157,34 +1159,60 @@ async function renderManageWoo(body) {
       $('#wooMsg').textContent = t('saved');
     } catch (e) { $('#wooMsg').textContent = t('error_load'); }
   });
+  // WooCommerce is fetched from THIS browser, not from the shop server:
+  // the server sits in a country the website host geo-blocks ("Your
+  // country is blocked"), while this browser in Myanmar is allowed in.
+  async function fetchWcFromBrowser(creds, onProgress) {
+    const base = String(creds.site_url || '').replace(/\/$/, '');
+    const auth = btoa(creds.consumer_key + ':' + creds.consumer_secret);
+    const perPage = 50;
+    const all = [];
+    let page = 1;
+    let totalPages = null;
+    do {
+      const url = base + '/wp-json/wc/v3/products?per_page=' + perPage + '&page=' + page + '&_fields=id,name,sku,price,images';
+      let res;
+      try {
+        res = await fetch(url, { headers: { Authorization: 'Basic ' + auth, Accept: 'application/json' } });
+      } catch (e) {
+        throw new Error(t('woo_browser_blocked') + ' (' + (e.message || 'network error') + ')');
+      }
+      if (!res.ok) throw new Error('WooCommerce replied HTTP ' + res.status + ' on page ' + page);
+      const total = res.headers.get('x-wp-totalpages');
+      if (total) totalPages = parseInt(total, 10) || totalPages;
+      let items;
+      try { items = await res.json(); }
+      catch (e) { throw new Error(t('woo_browser_blocked') + ' — WooCommerce returned a web page instead of product data'); }
+      if (!Array.isArray(items)) throw new Error(t('woo_browser_blocked') + ' — WooCommerce returned a web page instead of product data');
+      all.push(...items);
+      if (onProgress) onProgress(page, totalPages || '?');
+      if (items.length < perPage) break;
+      page++;
+    } while (totalPages === null || page <= totalPages);
+    return all;
+  }
+  let lastWooPreview = null;
   $('#wooTest').addEventListener('click', async () => {
     $('#wooMsg').textContent = t('loading');
     try {
-      const r = await api('/manage/woocommerce/test', { method: 'POST', body: JSON.stringify({}) });
-      $('#wooMsg').textContent = (r.ok ? t('wc_test_ok') : t('wc_test_fail')) + (r.message ? ' — ' + r.message : '');
-    } catch (e) { $('#wooMsg').textContent = t('wc_test_fail'); }
+      const creds = await api('/manage/woocommerce/credentials');
+      const base = String(creds.site_url || '').replace(/\/$/, '');
+      const auth = btoa(creds.consumer_key + ':' + creds.consumer_secret);
+      const res = await fetch(base + '/wp-json/wc/v3/products?per_page=1', { headers: { Authorization: 'Basic ' + auth, Accept: 'application/json' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      await res.json();
+      $('#wooMsg').textContent = t('wc_test_ok');
+    } catch (e) { $('#wooMsg').textContent = t('wc_test_fail') + (e && e.message ? ' — ' + e.message : ''); }
   });
-  // Start a WooCommerce job, then poll every 2s until it finishes.
-  // Each poll is a fast request, so a slow WC fetch can take minutes
-  // without the browser giving up on the request.
-  async function pollWooJob(jobId) {
-    const started = Date.now();
-    for (;;) {
-      const job = await apiRetry('/manage/woocommerce/jobs/' + encodeURIComponent(jobId), null, 3);
-      if (job.progress && job.progress.total_pages) {
-        $('#wooMsg').textContent = t('loading') + ' (' + job.progress.page + '/' + job.progress.total_pages + ')';
-      }
-      if (job.status === 'done') return job.result;
-      if (job.status === 'error') throw new Error(job.error || 'server_error');
-      if (Date.now() - started > 10 * 60 * 1000) throw new Error('timed out — please try again');
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-  }
   $('#wooPreview').addEventListener('click', async () => {
     $('#wooMsg').textContent = t('loading');
     try {
-      const started = await apiRetry('/manage/woocommerce/preview', { method: 'POST', body: JSON.stringify({}) }, 3);
-      const r = await pollWooJob(started.job_id);
+      const creds = await api('/manage/woocommerce/credentials');
+      const wcProducts = await fetchWcFromBrowser(creds, (page, total) => {
+        $('#wooMsg').textContent = t('loading') + ' (' + page + '/' + total + ')';
+      });
+      const r = await api('/manage/woocommerce/preview-data', { method: 'POST', body: JSON.stringify({ wc_products: wcProducts }) });
+      lastWooPreview = r;
       $('#wooMsg').textContent = '';
       const matchedN = (r.totals && r.totals.matched_count) || (Array.isArray(r.matched) ? r.matched.length : r.matched) || '—';
       const posOnlyN = (r.totals && r.totals.pos_only_count) || (Array.isArray(r.pos_only) ? r.pos_only.length : r.pos_only) || '—';
@@ -1196,11 +1224,11 @@ async function renderManageWoo(body) {
     } catch (e) { $('#wooMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
   });
   $('#wooImport').addEventListener('click', async () => {
+    if (!lastWooPreview || !Array.isArray(lastWooPreview.matched)) { $('#wooMsg').textContent = t('woo_preview_first'); return; }
     if (!window.confirm(t('confirm_import'))) return;
     $('#wooMsg').textContent = t('loading');
     try {
-      const started = await apiRetry('/manage/woocommerce/import', { method: 'POST', body: JSON.stringify({}) }, 3);
-      const r = await pollWooJob(started.job_id);
+      const r = await api('/manage/woocommerce/import-data', { method: 'POST', body: JSON.stringify({ matched: lastWooPreview.matched }) });
       $('#wooMsg').textContent = t('saved');
       $('#wooResult').innerHTML = '<pre style="white-space:pre-wrap;font-size:13px">' + esc(JSON.stringify(r, null, 2)) + '</pre>';
       loadBrands(); loadHomeGrid(true);
