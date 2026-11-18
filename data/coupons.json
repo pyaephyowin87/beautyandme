@@ -1,0 +1,9 @@
+[
+  {
+    "code": "TEST10",
+    "type": "percent",
+    "value": 10,
+    "note": "test only",
+    "active": true
+  }
+]

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "kbz-bank",
+    "method": "KBZ Bank",
+    "account_name": "Htet Htet Aung",
+    "account_number": "10151107501704401",
+    "note": "Special"
+  },
+  {
+    "id": "yoma-bank",
+    "method": "Yoma Bank",
+    "account_name": "Htet Htet Aung",
+    "account_number": "007145460001804",
+    "note": "Special"
+  },
+  {
+    "id": "aya-bank",
+    "method": "AYA Bank",
+    "account_name": "Htet Htet Aung",
+    "account_number": "20006571537",
+    "note": ""
+  },
+  {
+    "id": "cb-bank",
+    "method": "CB Bank",
+    "account_name": "Htet Htet Aung",
+    "account_number": "0107100900055875",
+    "note": "Special"
+  },
+  {
+    "id": "uab-bank",
+    "method": "UAB Bank",
+    "account_name": "Htet Htet Aung",
+    "account_number": "0511060100006837",
+    "note": "Special Call Account"
+  },
+  {
+    "id": "kbzpay",
+    "method": "KBZPay",
+    "account_name": "Htet Htet Aung",
+    "account_number": "09254255067",
+    "note": ""
+  },
+  {
+    "id": "cb-pay",
+    "method": "CB Pay",
+    "account_name": "Htet Htet Aung",
+    "account_number": "09254255067",
+    "note": ""
+  },
+  {
+    "id": "aya-pay",
+    "method": "AYA Pay",
+    "account_name": "Htet Htet Aung",
+    "account_number": "09254255067",
+    "note": ""
+  },
+  {
+    "id": "uab-pay",
+    "method": "UAB Pay",
+    "account_name": "Htet Htet Aung",
+    "account_number": "09254255067",
+    "note": ""
+  }
+]

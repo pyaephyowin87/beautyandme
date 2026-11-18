@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Beauty &amp; Me — K-Beauty Shop</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="logo.png">
+</head>
+<body>
+<header class="app-header">
+  <div class="header-row">
+    <button class="logo-btn" id="logoHome" aria-label="Beauty &amp; Me">
+      <img src="logo.png" alt="Beauty &amp; Me" class="logo-img" onerror="this.style.display='none';document.getElementById('logoFallback').style.display='inline'">
+      <span id="logoFallback" class="logo-fallback" style="display:none">Beauty &amp; Me</span>
+    </button>
+    <div class="header-actions">
+      <button id="langToggle" class="btn btn-ghost" type="button">EN</button>
+      <button id="authBtn" class="btn btn-ghost" type="button"></button>
+      <button id="cartBtn" class="btn btn-primary cart-btn" type="button">
+        <span id="cartBtnLabel">ခြင်းတောင်း</span>
+        <span id="cartCount" class="cart-count" hidden>0</span>
+      </button>
+    </div>
+  </div>
+  <div class="search-row">
+    <input id="searchInput" type="search" autocomplete="off" placeholder="ရှာဖွေမည်…">
+    <button id="searchBtn" class="btn btn-primary" type="button">ရှာမယ်</button>
+  </div>
+</header>
+
+<main id="main">
+  <!-- HOME VIEW -->
+  <section id="view-home" class="view">
+    <div class="hero">
+      <h1>Beauty &amp; Me</h1>
+      <p id="heroTagline">အလှအပ ပစ္စည်းများ — စိတ်ချယုံကြည်ရသော K-Beauty ဆိုင်</p>
+    </div>
+    <div id="brandChips" class="chips"></div>
+
+    <div class="section-head">
+      <h2 id="bestTitle">အရောင်းရဆုံး</h2>
+      <button class="link-btn" data-viewall="best" type="button">အားလုံးကြည့်မယ်</button>
+    </div>
+    <div id="rowBest" class="hrow"></div>
+
+    <div class="section-head" id="saleSectionHead" hidden>
+      <h2 id="saleTitle">လျှော့ဈေး</h2>
+      <button class="link-btn" data-viewall="sale" type="button">အားလုံးကြည့်မယ်</button>
+    </div>
+    <div id="rowSale" class="hrow"></div>
+
+    <div class="section-head">
+      <h2 id="newTitle">ပစ္စည်းအသစ်</h2>
+      <button class="link-btn" data-viewall="new" type="button">အားလုံးကြည့်မယ်</button>
+    </div>
+    <div id="rowNew" class="hrow"></div>
+
+    <div class="section-head">
+      <h2 id="allTitle">ပစ္စည်းအားလုံး</h2>
+    </div>
+    <div id="gridHome" class="grid"></div>
+    <div id="homeMoreWrap" class="center"><button id="homeMoreBtn" class="btn btn-outline" type="button">နောက်ထပ် ပြမယ်</button></div>
+  </section>
+
+  <!-- SHOP VIEW -->
+  <section id="view-shop" class="view" hidden>
+    <div class="section-head"><h2 id="shopTitle">ဆိုင်</h2></div>
+    <div id="shopBrandChips" class="chips"></div>
+    <div id="shopMeta" class="meta-line"></div>
+    <div id="gridShop" class="grid"></div>
+    <div class="center"><button id="shopMoreBtn" class="btn btn-outline" type="button">နောက်ထပ် ပြမယ်</button></div>
+  </section>
+
+  <!-- ORDERS VIEW -->
+  <section id="view-orders" class="view" hidden>
+    <div class="section-head"><h2 id="ordersTitle">ကျွန်ုပ်၏ အော်ဒါများ</h2></div>
+    <div id="ordersList"></div>
+  </section>
+
+  <!-- CHECKOUT VIEW -->
+  <section id="view-checkout" class="view" hidden>
+    <div class="section-head"><h2 id="checkoutTitle">ငွေချေမည်</h2></div>
+    <div id="checkoutBody"></div>
+  </section>
+
+  <!-- MANAGE VIEW -->
+  <section id="view-manage" class="view" hidden>
+    <div class="section-head"><h2 id="manageTitle">Manage</h2></div>
+    <div class="tabs" id="manageTabs">
+      <button class="tab active" data-mtab="dashboard" type="button">Dashboard</button>
+      <button class="tab" data-mtab="catalog" type="button">Catalog</button>
+      <button class="tab" data-mtab="coupons" type="button">Coupons</button>
+      <button class="tab" data-mtab="payments" type="button">Payments</button>
+      <button class="tab" data-mtab="applink" type="button">App link</button>
+      <button class="tab" data-mtab="woocommerce" type="button">WooCommerce</button>
+    </div>
+    <div id="manageBody"></div>
+  </section>
+</main>
+
+<footer class="app-footer">
+  <div class="footer-shop">
+    <strong>Beauty &amp; Me</strong>
+    <p id="footerAddress">တိုက် ၇ အခန်း ၂၊ ယုဇနအိမ်ယာ၊ သံသုမာလမ်းမကြီး</p>
+    <p><span id="footerPhoneLabel">ဖုန်း</span>: <a href="tel:09765117366">09765117366</a></p>
+    <p id="footerHours">ဖွင့်ချိန် — နေ့စဉ် မနက် ၉ နာရီ မှ ညနေ ၆ နာရီ</p>
+    <p><a id="messengerLink" href="#" target="_blank" rel="noopener">Messenger မှာ ဆက်သွယ်မယ်</a></p>
+  </div>
+  <div class="footer-apps">
+    <button id="playStoreBtn" class="btn btn-outline" type="button">Google Play</button>
+    <button id="appStoreBtn" class="btn btn-outline" type="button">App Store</button>
+  </div>
+  <p class="footer-copy">© 2026 Beauty &amp; Me</p>
+</footer>
+
+<nav class="bottom-nav">
+  <button class="nav-item active" data-view="home" type="button"><span class="nav-ico">⌂</span><span class="nav-label" data-i18n="nav_home">Home</span></button>
+  <button class="nav-item" data-view="shop" type="button"><span class="nav-ico">▦</span><span class="nav-label" data-i18n="nav_shop">ဆိုင်</span></button>
+  <button class="nav-item" data-view="orders" type="button"><span class="nav-ico">▤</span><span class="nav-label" data-i18n="nav_orders">အော်ဒါများ</span></button>
+  <button class="nav-item" data-view="manage" id="navManage" type="button" hidden><span class="nav-ico">⚙</span><span class="nav-label" data-i18n="nav_manage">Manage</span></button>
+</nav>
+
+<!-- CART DRAWER -->
+<div id="cartOverlay" class="overlay" hidden></div>
+<aside id="cartDrawer" class="drawer" hidden aria-label="Cart">
+  <div class="drawer-head">
+    <h2 id="cartTitle">ခြင်းတောင်း</h2>
+    <button id="cartClose" class="btn btn-ghost" type="button">✕</button>
+  </div>
+  <div id="cartItems" class="cart-items"></div>
+  <div class="cart-foot">
+    <div class="coupon-row">
+      <input id="couponInput" type="text" placeholder="Coupon code">
+      <button id="couponApplyBtn" class="btn btn-outline" type="button">Apply</button>
+    </div>
+    <div id="couponMsg" class="meta-line"></div>
+    <div class="totals">
+      <div class="total-row"><span id="lblSubtotal">Subtotal</span><span id="cartSubtotal">0 Ks</span></div>
+      <div class="total-row" id="cartDiscountRow" hidden><span id="lblDiscount">လျှော့ဈေး</span><span id="cartDiscount">−0 Ks</span></div>
+      <div class="total-row grand"><span id="lblTotal">Total</span><span id="cartTotal">0 Ks</span></div>
+    </div>
+    <button id="checkoutBtn" class="btn btn-primary btn-block" type="button">ငွေချေမယ်</button>
+  </div>
+</aside>
+
+<!-- PRODUCT DETAIL MODAL -->
+<div id="detailOverlay" class="overlay" hidden></div>
+<div id="detailModal" class="modal" hidden role="dialog" aria-modal="true">
+  <div class="modal-head">
+    <button id="detailClose" class="btn btn-ghost" type="button">✕ <span id="detailCloseLabel">ပိတ်မယ်</span></button>
+  </div>
+  <div id="detailBody" class="detail-body"></div>
+  <div id="detailStickyBar" class="sticky-bar"></div>
+</div>
+
+<!-- AUTH MODAL -->
+<div id="authOverlay" class="overlay" hidden></div>
+<div id="authModal" class="modal modal-sm" hidden role="dialog" aria-modal="true">
+  <div class="modal-head">
+    <h2 id="authTitle">အကောင့် ဝင်မယ်</h2>
+    <button id="authClose" class="btn btn-ghost" type="button">✕</button>
+  </div>
+  <div class="auth-body">
+    <div class="tabs" id="authTabs">
+      <button class="tab active" data-atab="login" type="button">Login</button>
+      <button class="tab" data-atab="register" type="button">Register</button>
+    </div>
+    <div id="authNameRow" class="field" hidden>
+      <label id="authNameLabel" for="authName">နာမည်</label>
+      <input id="authName" type="text" autocomplete="name">
+    </div>
+    <div class="field">
+      <label id="authPhoneLabel" for="authPhone">ဖုန်း</label>
+      <input id="authPhone" type="tel" autocomplete="tel" placeholder="09xxxxxxxxx">
+    </div>
+    <div class="field">
+      <label id="authPassLabel" for="authPass">Password</label>
+      <input id="authPass" type="password" autocomplete="current-password">
+    </div>
+    <div id="authError" class="error-text" hidden></div>
+    <button id="authSubmit" class="btn btn-primary btn-block" type="button">ဝင်မယ်</button>
+  </div>
+</div>
+
+<!-- ORDER DETAIL MODAL -->
+<div id="orderOverlay" class="overlay" hidden></div>
+<div id="orderModal" class="modal modal-sm" hidden role="dialog" aria-modal="true">
+  <div class="modal-head">
+    <h2 id="orderDetailTitle">အော်ဒါ အသေးစိတ်</h2>
+    <button id="orderClose" class="btn btn-ghost" type="button">✕</button>
+  </div>
+  <div id="orderBody" class="order-body"></div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>

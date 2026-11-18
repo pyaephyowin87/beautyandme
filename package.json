@@ -1,0 +1,1 @@
+{"dependencies":{"express":"^4.21.2","pg":"^8.13.1"},"description":"Beauty & Me shop — standalone Node.js + Express backend (Render free tier). POS prices are the source of truth.","engines":{"node":"20"},"main":"server.js","name":"beauty-and-me-shop","scripts":{"seed":"node scripts/seed.js","start":"node server.js"},"version":"1.0.0"}

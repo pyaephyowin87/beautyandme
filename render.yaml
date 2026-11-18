@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: beauty-and-me-shop
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: beauty-and-me-db
+          property: connectionString
+      # Optional WooCommerce read-only credentials (also settable in Manage):
+      # - key: WC_SITE_URL
+      #   sync: false
+      # - key: WC_CONSUMER_KEY
+      #   sync: false
+      # - key: WC_CONSUMER_SECRET
+      #   sync: false
+
+databases:
+  - name: beauty-and-me-db
+    plan: free
