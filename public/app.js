@@ -1157,7 +1157,7 @@ async function renderManageWoo(body) {
         '<tr><td>' + esc(t('pos_only')) + '</td><td><strong>' + esc(String(r.pos_only != null ? r.pos_only : (r.totals && r.totals.pos_only) || '—')) + '</strong></td></tr>' +
         '<tr><td>' + esc(t('wc_only')) + '</td><td><strong>' + esc(String(r.wc_only_count != null ? r.wc_only_count : (r.totals && r.totals.wc_only_count) || '—')) + '</strong></td></tr>' +
         '</tbody></table>';
-    } catch (e) { $('#wooMsg').textContent = t('error_load'); }
+    } catch (e) { $('#wooMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
   });
   $('#wooImport').addEventListener('click', async () => {
     if (!window.confirm(t('confirm_import'))) return;
@@ -1167,7 +1167,7 @@ async function renderManageWoo(body) {
       $('#wooMsg').textContent = t('saved');
       $('#wooResult').innerHTML = '<pre style="white-space:pre-wrap;font-size:13px">' + esc(JSON.stringify(r, null, 2)) + '</pre>';
       loadBrands(); loadHomeGrid(true);
-    } catch (e) { $('#wooMsg').textContent = t('error_load'); }
+    } catch (e) { $('#wooMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
   });
 }
 
