@@ -190,6 +190,23 @@ async function api(path, opts) {
   }
   return data;
 }
+// Same as api(), but retries a few times when the hosting proxy briefly
+// answers with an HTML error page instead of JSON (free-tier wake-ups /
+// restarts). A failed attempt is retried; a real JSON error is not.
+async function apiRetry(path, opts, tries) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= (tries || 3); attempt++) {
+    try {
+      return await api(path, opts);
+    } catch (e) {
+      lastErr = e;
+      const transient = !e.status || e.message.indexOf('Unexpected token') === 0 || e.message.indexOf('<!DOCTYPE') !== -1;
+      if (!transient || attempt >= (tries || 3)) throw e;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+  throw lastErr;
+}
 function unitPrice(p) {
   if (p.sale_price != null && p.sale_price !== '') return Number(p.sale_price);
   return Number(p.price);
@@ -1153,7 +1170,7 @@ async function renderManageWoo(body) {
   async function pollWooJob(jobId) {
     const started = Date.now();
     for (;;) {
-      const job = await api('/manage/woocommerce/jobs/' + encodeURIComponent(jobId));
+      const job = await apiRetry('/manage/woocommerce/jobs/' + encodeURIComponent(jobId), null, 3);
       if (job.progress && job.progress.total_pages) {
         $('#wooMsg').textContent = t('loading') + ' (' + job.progress.page + '/' + job.progress.total_pages + ')';
       }
@@ -1166,7 +1183,7 @@ async function renderManageWoo(body) {
   $('#wooPreview').addEventListener('click', async () => {
     $('#wooMsg').textContent = t('loading');
     try {
-      const started = await api('/manage/woocommerce/preview', { method: 'POST', body: JSON.stringify({}) });
+      const started = await apiRetry('/manage/woocommerce/preview', { method: 'POST', body: JSON.stringify({}) }, 3);
       const r = await pollWooJob(started.job_id);
       $('#wooMsg').textContent = '';
       const matchedN = (r.totals && r.totals.matched_count) || (Array.isArray(r.matched) ? r.matched.length : r.matched) || '—';
@@ -1182,7 +1199,7 @@ async function renderManageWoo(body) {
     if (!window.confirm(t('confirm_import'))) return;
     $('#wooMsg').textContent = t('loading');
     try {
-      const started = await api('/manage/woocommerce/import', { method: 'POST', body: JSON.stringify({}) });
+      const started = await apiRetry('/manage/woocommerce/import', { method: 'POST', body: JSON.stringify({}) }, 3);
       const r = await pollWooJob(started.job_id);
       $('#wooMsg').textContent = t('saved');
       $('#wooResult').innerHTML = '<pre style="white-space:pre-wrap;font-size:13px">' + esc(JSON.stringify(r, null, 2)) + '</pre>';
