@@ -1133,8 +1133,19 @@ app.get('/api/manage/products', authMiddleware, managerMiddleware, async (req, r
         return keywords.every((k) => hay.includes(k));
       });
     }
+    // Counts are computed on the search result, BEFORE the status filter,
+    // so the chips show how many match the current search.
+    const counts = {
+      all: items.length,
+      in_stock: items.filter((p) => p.in_stock).length,
+      out_of_stock: items.filter((p) => !p.in_stock).length,
+      sale: items.filter((p) => p.sale_price != null && p.sale_price < p.price).length,
+    };
+    if (req.query.stock === 'in') items = items.filter((p) => p.in_stock);
+    else if (req.query.stock === 'out') items = items.filter((p) => !p.in_stock);
+    if (req.query.sale === '1') items = items.filter((p) => p.sale_price != null && p.sale_price < p.price);
     const total = items.length;
-    return res.json({ items: items.slice(offset, offset + limit), total });
+    return res.json({ items: items.slice(offset, offset + limit), total, counts });
   } catch (err) { return next(err); }
 });
 
