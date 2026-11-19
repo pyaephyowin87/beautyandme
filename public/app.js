@@ -94,6 +94,8 @@ const I18N = {
     user_not_found: 'ဒီဖုန်းနဲ့ အကောင့် မရှိသေးပါ — အရင် register လုပ်ခိုင်းပါ',
     owner_only: 'Owner (095117366) ပဲ လုပ်နိုင်ပါတယ်', no_users: 'User မရှိသေးပါ',
     pw_reset_hint: 'ချိန်းပြီးရင် customer ကို Messenger / ဖုန်း နဲ့ password အသစ်ကို ပြောပေးပါ — customer က အသစ်နဲ့ ပြန်ဝင်ရမယ်',
+    activity: 'လုပ်ဆောင်ချက် မှတ်တမ်း', search_activity: 'ရှာမယ် (လူ / order / ပစ္စည်း)…', all_actions: 'လုပ်ဆောင်ချက် အားလုံး', no_activity: 'မှတ်တမ်း မရှိသေးပါ',
+    action_order_status: 'Order status ပြောင်းတယ်', action_password_reset: 'Password ချိန်းပေးတယ်', action_manager_add: 'Manager ထည့်တယ်', action_manager_remove: 'Manager ဖြုတ်တယ်', action_product_update: 'ပစ္စည်း ပြင်တယ်', action_product_photo_add: 'ပစ္စည်း ပုံ ထည့်တယ်', action_product_photo_remove: 'ပစ္စည်း ပုံ ဖျက်တယ်', action_coupon_create: 'Coupon လုပ်တယ်', action_coupon_delete: 'Coupon ဖျက်တယ်', action_payments_update: 'Payment အကောင့် ပြင်တယ်', action_app_links_update: 'App link ပြင်တယ်', action_woocommerce_settings: 'WooCommerce setting ပြင်တယ်', action_woocommerce_import: 'WooCommerce ပုံ တင်တယ်',
     manager_hint: 'ဝန်ထမ်းက ဆိုင်မှာ အရင် register လုပ်ထားရမယ် (နာမည် + ဖုန်း) — ပြီးမှ ဒီမှာ ဖုန်းနံပါတ် ရိုက်ပြီး Add လုပ်ပါ',
     add_photo: 'ပုံထည့်မယ်', change_photo: 'ပုံပြောင်းမယ်', remove_photo: 'ပုံဖျက်မယ်',
     coupon_scope: 'Coupon သက်ရောက်မယ့် အရာ (မရွေးရင် ပစ္စည်းအားလုံးအတွက်)',
@@ -194,6 +196,8 @@ const I18N = {
     user_not_found: 'No account with this phone — ask them to register first',
     owner_only: 'Only the owner (095117366) can do this', no_users: 'No users yet',
     pw_reset_hint: 'After changing, tell the customer the new password by Messenger / phone — they will sign in again with it',
+    activity: 'Activity log', search_activity: 'Search (person / order / product)…', all_actions: 'All actions', no_activity: 'No activity yet',
+    action_order_status: 'Changed order status', action_password_reset: 'Reset a password', action_manager_add: 'Added a manager', action_manager_remove: 'Removed a manager', action_product_update: 'Edited a product', action_product_photo_add: 'Added a product photo', action_product_photo_remove: 'Removed a product photo', action_coupon_create: 'Created a coupon', action_coupon_delete: 'Deleted a coupon', action_payments_update: 'Edited payment accounts', action_app_links_update: 'Edited app links', action_woocommerce_settings: 'Edited WooCommerce settings', action_woocommerce_import: 'Imported WooCommerce photos',
     manager_hint: 'Staff must register in the shop first (name + phone) — then type their phone here and tap Add',
     add_photo: 'Add photo', change_photo: 'Change photo', remove_photo: 'Remove photo',
     coupon_scope: 'What this coupon applies to (leave empty = all products)',
@@ -1291,7 +1295,7 @@ async function openOrderDetail(id) {
 /* ---------------- manage ---------------- */
 // Payments, App link and WooCommerce are OWNER-ONLY — managers must not
 // see them (a wrong payment account or API key there breaks the whole shop).
-const OWNER_TABS = ['payments', 'applink', 'woocommerce'];
+const OWNER_TABS = ['payments', 'applink', 'woocommerce', 'activity'];
 function loadManage(tab) {
   const isOwner = state.user && (state.user.is_owner || state.user.phone === '095117366');
   $$('#manageTabs .tab').forEach((b) => {
@@ -1313,6 +1317,7 @@ function loadManage(tab) {
   else if (tab === 'payments') renderManagePayments(body);
   else if (tab === 'applink') renderManageAppLinks(body);
   else if (tab === 'woocommerce') renderManageWoo(body);
+  else if (tab === 'activity') renderManageActivity(body);
 }
 /* ---------------- manage: orders ---------------- */
 let mgOrders = { q: '', status: '', offset: 0, items: [] };
@@ -1553,6 +1558,61 @@ async function loadMgUsers(reset) {
         loadMgUsers(true);
       } catch (e) { toast(e.status === 404 ? t('user_not_found') : t('error_load')); }
     }));
+  } catch (e) {
+    wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
+
+/* ---------------- manage: activity log (owner only) ---------------- */
+const ACTIVITY_ACTIONS = ['order_status', 'password_reset', 'manager_add', 'manager_remove', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
+function activityLabel(a) { return t('action_' + a); }
+let mgActivity = { q: '', action: '', offset: 0, items: [] };
+async function renderManageActivity(body) {
+  body.innerHTML =
+    '<div class="mg-card"><div class="row-flex">' +
+    '<input id="mgActSearch" type="search" placeholder="' + esc(t('search_activity')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
+    '<select id="mgActFilter" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px">' +
+    '<option value="">' + esc(t('all_actions')) + '</option>' +
+    ACTIVITY_ACTIONS.map((a) => '<option value="' + a + '">' + esc(activityLabel(a)) + '</option>').join('') +
+    '</select>' +
+    '<button class="btn btn-primary" type="button" id="mgActSearchBtn">' + esc(t('search_btn')) + '</button>' +
+    '</div><div id="mgActWrap" style="margin-top:12px"></div>' +
+    '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgActMoreBtn">' + esc(t('more')) + '</button></div></div>';
+  mgActivity = { q: '', action: '', offset: 0, items: [] };
+  const doSearch = () => {
+    mgActivity.q = $('#mgActSearch').value.trim();
+    mgActivity.action = $('#mgActFilter').value;
+    mgActivity.offset = 0; mgActivity.items = [];
+    loadMgActivity(true);
+  };
+  $('#mgActSearchBtn').addEventListener('click', doSearch);
+  $('#mgActSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  $('#mgActFilter').addEventListener('change', doSearch);
+  $('#mgActMoreBtn').addEventListener('click', () => loadMgActivity(false));
+  loadMgActivity(true);
+}
+async function loadMgActivity(reset) {
+  const wrap = $('#mgActWrap');
+  if (!wrap) return;
+  if (reset) { mgActivity.offset = 0; mgActivity.items = []; wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>'; }
+  const params = new URLSearchParams({ limit: String(PAGE), offset: String(mgActivity.offset) });
+  if (mgActivity.q) params.set('q', mgActivity.q);
+  if (mgActivity.action) params.set('action', mgActivity.action);
+  try {
+    const data = await api('/manage/activity?' + params.toString());
+    const items = data.activity || [];
+    if (reset) mgActivity.items = items; else mgActivity.items = mgActivity.items.concat(items);
+    mgActivity.offset += items.length;
+    const moreBtn = $('#mgActMoreBtn');
+    if (moreBtn) moreBtn.style.display = (data.total != null && mgActivity.offset < data.total) ? '' : 'none';
+    if (!mgActivity.items.length) { wrap.innerHTML = '<div class="empty">' + esc(t('no_activity')) + '</div>'; return; }
+    wrap.innerHTML = mgActivity.items.map((e) =>
+      '<div class="mg-card" style="margin-bottom:10px">' +
+      '<div class="kv-row"><span><strong>' + esc(e.user_name || '') + '</strong> — ' + esc(e.user_phone || '') + '</span><span style="color:var(--muted);font-size:12px">' + esc(fmtDate(e.created_at)) + '</span></div>' +
+      '<div style="margin-top:4px"><span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(activityLabel(e.action)) + '</span>' +
+      (e.target_id ? ' <strong>' + esc(e.target_id) + '</strong>' : '') + '</div>' +
+      (e.details ? '<div style="margin-top:4px;color:var(--muted);font-size:13px">' + esc(e.details) + '</div>' : '') +
+      '</div>').join('');
   } catch (e) {
     wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
   }
