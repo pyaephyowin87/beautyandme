@@ -734,6 +734,108 @@ app.patch('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (re
   } catch (err) { return next(err); }
 });
 
+// Admin edits an order's items (add / remove / change qty). Only while the
+// order is still open (not delivered / cancelled). Lines already in the
+// order keep their snapshot unit price — only the quantity changes; NEW
+// lines are priced at the current catalog price (sale price if set, option
+// price for option products). Stock is NOT enforced here: POS is the truth
+// and the admin knows the shop's real stock. Delivery fee is unchanged.
+// Total is recomputed; the coupon (if any) is re-applied to the new items.
+app.patch('/api/manage/orders/:id/items', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const order = await store.getOrder(req.params.id);
+    if (!order) return res.status(404).json({ error: 'order_not_found' });
+    if (order.status === 'delivered' || order.status === 'cancelled') {
+      return res.status(400).json({ error: 'order_locked' });
+    }
+    const rawItems = (req.body || {}).items;
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      return res.status(400).json({ error: 'items_required' });
+    }
+    // Merge duplicate lines (same product + option), cap qty at 99.
+    const merged = new Map();
+    for (const it of rawItems) {
+      if (!it || !it.product_id) return res.status(400).json({ error: 'product_not_found', product_id: it && it.product_id });
+      const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
+      const key = `${it.product_id}||${it.option_label || ''}`;
+      if (merged.has(key)) {
+        const cur = merged.get(key);
+        cur.qty = Math.min(99, cur.qty + qty);
+      } else {
+        merged.set(key, { product_id: it.product_id, option_label: it.option_label || null, qty });
+      }
+    }
+    const products = await store.listProducts();
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const oldItems = order.items || [];
+    const oldByKey = new Map(oldItems.map((oi) => [`${oi.product_id}||${oi.option_label || ''}`, oi]));
+    const newItems = [];
+    const loadedProducts = [];
+    let subtotal = 0;
+    for (const it of merged.values()) {
+      const product = byId.get(it.product_id);
+      if (!product) return res.status(400).json({ error: 'product_not_found', product_id: it.product_id });
+      let unitPrice;
+      let optionLabel = null;
+      if (Array.isArray(product.options) && product.options.length) {
+        if (!it.option_label) return res.status(400).json({ error: 'option_required', product_id: it.product_id });
+        const opt = product.options.find((o) => normName(o.label) === normName(it.option_label));
+        if (!opt) return res.status(400).json({ error: 'option_not_found', product_id: it.product_id });
+        unitPrice = opt.price;
+        optionLabel = opt.label;
+      } else {
+        unitPrice = product.sale_price != null && product.sale_price < product.price
+          ? product.sale_price : product.price;
+      }
+      // Keep the price the customer was already charged for lines that were
+      // in the order; only new lines take the current price.
+      const oldLine = oldByKey.get(`${it.product_id}||${optionLabel || ''}`);
+      if (oldLine && oldLine.unit_price != null) unitPrice = oldLine.unit_price;
+      const lineTotal = unitPrice * it.qty;
+      subtotal += lineTotal;
+      loadedProducts.push(product);
+      newItems.push({
+        product_id: product.id,
+        product_name: product.name,
+        option_label: optionLabel,
+        qty: it.qty,
+        unit_price: unitPrice,
+        line_total: lineTotal,
+      });
+    }
+    // Re-apply the order's coupon (if any) to the new items.
+    let discount = 0;
+    if (order.coupon_code) {
+      const coupon = await store.getCoupon(order.coupon_code);
+      const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
+      if (coupon && coupon.active !== false && couponCustomerEligible(coupon, custPhone)) {
+        const calcItems = newItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
+        discount = couponDiscountFor(coupon, calcItems).discount;
+      }
+    }
+    const oldTotal = order.total;
+    order.items = newItems;
+    order.subtotal = subtotal;
+    order.discount = discount;
+    order.total = subtotal - discount;
+    order.updated_at = new Date().toISOString();
+    await store.saveOrder(order);
+    // Change summary for the activity log.
+    const summary = [];
+    const newByKey = new Map(newItems.map((oi) => [`${oi.product_id}||${oi.option_label || ''}`, oi]));
+    for (const oi of newItems) {
+      const old = oldByKey.get(`${oi.product_id}||${oi.option_label || ''}`);
+      if (!old) summary.push(`+ ${oi.product_name}${oi.option_label ? ' (' + oi.option_label + ')' : ''} × ${oi.qty}`);
+      else if (old.qty !== oi.qty) summary.push(`${oi.product_name}: qty ${old.qty} → ${oi.qty}`);
+    }
+    for (const oi of oldItems) {
+      if (!newByKey.has(`${oi.product_id}||${oi.option_label || ''}`)) summary.push(`− ${oi.product_name}${oi.option_label ? ' (' + oi.option_label + ')' : ''}`);
+    }
+    await logActivity(req, 'order_edit', 'order', order.id, `total: ${oldTotal} → ${order.total} Ks${summary.length ? ' — ' + summary.join('; ') : ''}`);
+    return res.json({ order: adminOrderShape(order), old_total: oldTotal, new_total: order.total });
+  } catch (err) { return next(err); }
+});
+
 // Activity log — owner only. Newest first; ?q searches who/what, ?action filters by kind.
 app.get('/api/manage/activity', authMiddleware, ownerMiddleware, async (req, res, next) => {
   try {
