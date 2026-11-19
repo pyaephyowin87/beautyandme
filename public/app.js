@@ -240,6 +240,7 @@ const state = {
   detail: null,          // current product in detail modal
   detailOption: null,    // selected option label
   detailQty: 1,
+  cardOpt: {},           // card option pick: product id -> selected option label
   co: { delivery: 'yangon_inner', payment: 'cod', account: null, screenshot: null },
   coForm: { name: '', phone: '', address: '' },
   manageTab: 'dashboard',
@@ -466,15 +467,24 @@ function renderChips(container) {
 
 /* ---------------- product cards ---------------- */
 function cardHTML(p) {
+  // Variation products: show every size/shade as a tappable chip on the card
+  // so customers see the other options (and their prices) without opening the
+  // detail page. The first option is selected by default (highlighted).
+  const hasOpts = Array.isArray(p.options) && p.options.length > 0;
+  const selOpt = hasOpts ? (p.options.find((o) => o.label === state.cardOpt[p.id]) || p.options[0]) : null;
   const price = displayPrice(p);
-  const hasSale = p.sale_price != null && p.sale_price !== '' && Number(p.sale_price) < Number(p.price);
+  // Sale prices do not apply to option lines at checkout (options always pay
+  // their option price), so option products never show a sale badge/strike.
+  const hasSale = !hasOpts && p.sale_price != null && p.sale_price !== '' && Number(p.sale_price) < Number(p.price);
   const salePct = hasSale ? Math.round((1 - Number(p.sale_price) / Number(p.price)) * 100) : 0;
   const img = p.image_url
     ? '<img src="' + esc(p.image_url) + '" alt="' + esc(p.name) + '" loading="lazy">'
     : '<span class="img-placeholder">' + esc(t('no_image')) + '</span>';
-  const priceHTML = hasSale
-    ? '<span class="was">' + fmt(p.price) + '</span>' + fmt(p.sale_price)
-    : fmt(price);
+  const priceHTML = hasOpts
+    ? fmt(optionPrice(selOpt))
+    : (hasSale
+      ? '<span class="was">' + fmt(p.price) + '</span>' + fmt(p.sale_price)
+      : fmt(price));
   const wished = isWished(p.id);
   return '<article class="card' + (p.in_stock ? '' : ' soldout') + '">' +
     '<div class="card-img-wrap"><button type="button" class="card-img" data-open="' + esc(String(p.id)) + '" aria-label="' + esc(p.name) + '">' + img + '</button>' +
@@ -483,14 +493,29 @@ function cardHTML(p) {
     '<div class="card-body">' +
     '<span class="card-brand">' + esc(p.brand || '') + '</span>' +
     '<button type="button" class="card-name" data-open="' + esc(String(p.id)) + '" style="background:none;border:none;padding:0;text-align:left;font:inherit;color:inherit">' + esc(p.name) + '</button>' +
-    '<span class="card-price">' + priceHTML + '</span>' +
+    '<span class="card-price" data-cardprice="' + esc(String(p.id)) + '">' + priceHTML + '</span>' +
+    (hasOpts ? '<div class="card-opts">' + p.options.map((o) => '<button type="button" class="chip' + (o.label === selOpt.label ? ' active' : '') + '" data-opt="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" data-price="' + o.price + '">' + esc(o.label) + '</button>').join('') + '</div>' : '') +
     '<span class="badge ' + (p.in_stock ? 'in' : 'out') + '">' + esc(p.in_stock ? t('in_stock') : t('out_stock')) + '</span>' +
     '<button type="button" class="btn btn-primary card-add" data-add="' + esc(String(p.id)) + '"' + (p.in_stock ? '' : ' disabled') + '>' + esc(t('add_cart')) + '</button>' +
     '</div></article>';
 }
+// Card option pick: remember the choice, show its price on the card, and
+// highlight the tapped chip — without re-rendering the grid (keeps scroll).
+function applyCardOption(card, pid, label, price) {
+  state.cardOpt[pid] = label;
+  if (card) {
+    const pe = card.querySelector('[data-cardprice]');
+    if (pe) pe.textContent = fmt(price);
+    $$('.chip', card).forEach((c) => c.classList.toggle('active', c.dataset.label === label));
+  }
+}
 function bindCards(container) {
   $$('[data-open]', container).forEach((b) => b.addEventListener('click', () => openProduct(b.dataset.open)));
-  $$('[data-add]', container).forEach((b) => b.addEventListener('click', () => quickAdd(b.dataset.add)));
+  $$('[data-add]', container).forEach((b) => b.addEventListener('click', () => quickAdd(b.dataset.add, state.cardOpt[b.dataset.add])));
+  $$('[data-opt]', container).forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    applyCardOption(b.closest('.card'), b.dataset.opt, b.dataset.label, Number(b.dataset.price));
+  }));
   $$('[data-wish]', container).forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();
     toggleWishlist(b.dataset.wish, b);
@@ -548,10 +573,15 @@ async function loadWishlist() {
   grid.innerHTML = fresh.map(cardHTML).join('');
   bindCards(grid);
 }
-async function quickAdd(id) {
+async function quickAdd(id, optLabel) {
   try {
     const p = await api('/products/' + encodeURIComponent(id));
-    if (p.options && p.options.length) { openProduct(id); return; }
+    if (p.options && p.options.length) {
+      // A size was already picked on the card: add it straight away.
+      // Otherwise open the detail page so the customer picks one there.
+      if (optLabel) { addToCart(p, optLabel, 1); return; }
+      openProduct(id); return;
+    }
     if (!p.in_stock) return;
     addToCart(p, null, 1);
   } catch (e) { toast(t('error_load')); }
@@ -1873,13 +1903,13 @@ function paintMgCatalog() {
         '<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span style="font-size:12px;color:var(--muted);flex:1;min-width:0">' + esc(o.label) + '</span>' +
         '<input type="number" min="1" step="500" value="' + o.price + '" data-optprice="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:92px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px"></div>').join('') + '</div>' : '') +
       '</div></div></td>' +
-      '<td>' + (Array.isArray(p.options) && p.options.length
+      '<td data-label="' + esc(t('price')) + '">' + (Array.isArray(p.options) && p.options.length
         ? fmt(p.price)
         : '<input type="number" min="1" step="500" value="' + p.price + '" data-price="' + esc(String(p.id)) + '" style="width:92px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px">') + '</td>' +
-      '<td><input type="number" min="0" step="500" value="' + (p.sale_price != null ? p.sale_price : '') + '" placeholder="' + fmt(p.price) + '" data-sale="' + esc(String(p.id)) + '"></td>' +
-      '<td><strong>' + esc(String(p.stock != null ? p.stock : (p.quantity != null ? p.quantity : '—'))) + '</strong></td>' +
-      '<td><button type="button" class="toggle' + (p.sale_featured ? ' on' : '') + '" data-tgl="sale_featured" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('sale_featured')) + '"></button></td>' +
-      '<td><button type="button" class="toggle' + (p.best_seller ? ' on' : '') + '" data-tgl="best_seller" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('best_seller')) + '"></button></td>' +
+      '<td data-label="' + esc(t('sale_price')) + '"><input type="number" min="0" step="500" value="' + (p.sale_price != null ? p.sale_price : '') + '" placeholder="' + fmt(p.price) + '" data-sale="' + esc(String(p.id)) + '"></td>' +
+      '<td data-label="' + esc(t('stock_qty')) + '"><strong>' + esc(String(p.stock != null ? p.stock : (p.quantity != null ? p.quantity : '—'))) + '</strong></td>' +
+      '<td data-label="' + esc(t('sale_featured')) + '"><button type="button" class="toggle' + (p.sale_featured ? ' on' : '') + '" data-tgl="sale_featured" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('sale_featured')) + '"></button></td>' +
+      '<td data-label="' + esc(t('best_seller')) + '"><button type="button" class="toggle' + (p.best_seller ? ' on' : '') + '" data-tgl="best_seller" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('best_seller')) + '"></button></td>' +
       '</tr>').join('') + '</tbody></table>';
   $$('[data-sale]', wrap).forEach((inp) => {
     inp.addEventListener('change', async () => {
