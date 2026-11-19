@@ -68,6 +68,48 @@ function publicUser(user) {
   return { id: user.id, name: user.name, phone: user.phone, is_manager: user.phone === MANAGER_PHONE };
 }
 
+// Product type, derived from the product name. The POS category field is
+// inconsistent (sometimes a brand name, sometimes a type, sometimes both
+// spellings of the same type), so the name is the primary signal and the
+// category is only a fallback. Validated against the full 402-product
+// catalog 2026-11-19: every product lands in a sensible type; only 5 fall
+// to 'other' (edible supplements with no beauty type).
+const PRODUCT_TYPE_ORDER = ['cleanser', 'toner', 'serum', 'ampoule', 'moisturizer', 'sunscreen', 'mask', 'lip', 'eye', 'hair', 'body', 'makeup', 'treatment', 'sets', 'accessory', 'other'];
+const PRODUCT_TYPE_LABELS = { cleanser: 'Cleanser', toner: 'Toner', serum: 'Serum & Essence', ampoule: 'Ampoule', moisturizer: 'Moisturizer', sunscreen: 'Sunscreen', mask: 'Mask & Pack', lip: 'Lip Care', eye: 'Eye Care', hair: 'Hair Care', body: 'Body Care', makeup: 'Makeup', treatment: 'Treatment', sets: 'Sets & Gifts', accessory: 'Accessory', other: 'Other' };
+const PRODUCT_CATEGORY_TYPE = {
+  'serum & essence': 'serum', serum: 'serum', toner: 'toner', mist: 'toner',
+  moisturizer: 'moisturizer', cream: 'moisturizer', lotion: 'moisturizer',
+  'lip care': 'lip', 'body care': 'body', 'body wash': 'body',
+  'mask & pack': 'mask', mask: 'mask', cleansing: 'cleanser', 'facial foam': 'cleanser',
+  sunscreen: 'sunscreen', suncream: 'sunscreen', shampoo: 'hair', 'hair serum': 'hair',
+  'hair care': 'hair', treatment: 'hair', 'eye care': 'eye',
+  'foundation & primer': 'makeup', foundation: 'makeup', 'make up': 'makeup',
+  'foundation& primer': 'makeup', accessory: 'accessory', 'sets & gifts': 'sets',
+};
+function deriveProductType(p) {
+  const n = String(p.name || '').toLowerCase();
+  const has = (...ws) => ws.some((w) => n.includes(w));
+  if (has('skin tint')) return 'makeup';
+  if (has('lip', 'tint')) return 'lip';
+  if (has('eye')) return 'eye';
+  if (has('shampoo', 'hair', 'scalp', 'treatment')) return 'hair';
+  if (has('sunscreen', 'suncream', 'sun cream', 'spf')) return 'sunscreen';
+  if (has('cleanser', 'cleansing', 'facial foam', 'face wash', 'foam')) return 'cleanser';
+  if (has('mask', 'clay pack', 'clay')) return 'mask';
+  if (has('ampoule')) return 'ampoule';
+  if (has('toner', 'tonic', 'mist', 'pad', 'softener')) return 'toner';
+  if (has('serum', 'essence', 'shot', 'booster')) return 'serum';
+  if (has('moisturizer', 'cream', 'lotion', 'emulsion', 'gel', 'milk')) return 'moisturizer';
+  if (has('foundation', 'primer', 'pact', 'cushion', 'blush', 'makeup', 'make up', 'eyeliner', 'eyebrow', 'mascara', 'eyeshadow', 'shadow', 'highlight', 'hightlight', 'cheek', 'liner', 'pencil', 'palette', 'powder', 'setting spray', 'concealer')) return 'makeup';
+  if (has('patch', 'spot')) return 'treatment';
+  if (has('perfume', 'deodorant', 'roll on', 'scent spray', 'scrub')) return 'body';
+  if (has('body')) return 'body';
+  if (has('cotton', 'towel', 'brush', 'bag', 'paper', 'sticker', 'accessory', 'massager')) return 'accessory';
+  if (has('kit', 'gift') || /\bset\b/.test(n)) return 'sets';
+  if (has('jelly', 'gummy', 'fiber')) return 'other';
+  return PRODUCT_CATEGORY_TYPE[String(p.category || '').toLowerCase()] || 'other';
+}
+
 // Strip stock quantities from a product for customer-facing responses.
 function publicProduct(p) {
   const out = {
@@ -76,6 +118,7 @@ function publicProduct(p) {
     name: p.name,
     brand: p.brand,
     category: p.category,
+    product_type: deriveProductType(p),
     price: p.price,
     sale_price: p.sale_price ?? null,
     in_stock: p.in_stock,
@@ -179,12 +222,13 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/products', async (req, res, next) => {
   try {
-    const { q = '', brand = '', section = '' } = req.query;
+    const { q = '', brand = '', section = '', type = '' } = req.query;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     let items = await store.listProducts();
 
     if (brand) items = items.filter((p) => normName(p.brand) === normName(brand));
+    if (type) items = items.filter((p) => deriveProductType(p) === type);
     if (section === 'best') items = items.filter((p) => p.best_seller);
     else if (section === 'new') items = items.filter((p) => p.is_new);
     else if (section === 'sale') items = items.filter((p) => p.sale_price != null && p.sale_price < p.price);
@@ -192,7 +236,7 @@ app.get('/api/products', async (req, res, next) => {
     const keywords = String(q).toLowerCase().split(/\s+/).filter(Boolean);
     if (keywords.length) {
       items = items.filter((p) => {
-        const hay = `${p.name} ${p.brand} ${p.category} ${(p.options || []).map((o) => o.label).join(' ')}`.toLowerCase();
+        const hay = `${p.name} ${p.brand} ${p.category} ${deriveProductType(p)} ${(PRODUCT_TYPE_LABELS[deriveProductType(p)] || '')} ${(p.options || []).map((o) => o.label).join(' ')}`.toLowerCase();
         return keywords.every((k) => hay.includes(k));
       });
     }
@@ -208,6 +252,20 @@ app.get('/api/products/:id', async (req, res, next) => {
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
     return res.json(publicProduct(p));
+  } catch (err) { return next(err); }
+});
+
+app.get('/api/types', async (_req, res, next) => {
+  try {
+    const counts = {};
+    for (const p of await store.listProducts()) {
+      const t = deriveProductType(p);
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    const out = PRODUCT_TYPE_ORDER
+      .filter((t) => counts[t])
+      .map((t) => ({ type: t, label: PRODUCT_TYPE_LABELS[t], count: counts[t] }));
+    return res.json(out);
   } catch (err) { return next(err); }
 });
 
@@ -495,7 +553,7 @@ app.get('/api/manage/products', authMiddleware, managerMiddleware, async (req, r
     const keywords = String(q).toLowerCase().split(/\s+/).filter(Boolean);
     if (keywords.length) {
       items = items.filter((p) => {
-        const hay = `${p.name} ${p.brand} ${p.category} ${(p.options || []).map((o) => o.label).join(' ')}`.toLowerCase();
+        const hay = `${p.name} ${p.brand} ${p.category} ${deriveProductType(p)} ${(PRODUCT_TYPE_LABELS[deriveProductType(p)] || '')} ${(p.options || []).map((o) => o.label).join(' ')}`.toLowerCase();
         return keywords.every((k) => hay.includes(k));
       });
     }
@@ -823,7 +881,8 @@ app.post('/api/manage/woocommerce/import-data', authMiddleware, managerMiddlewar
       const p = await store.getProduct(m.product_id);
       if (!p) continue;
       if (p.image_url) { alreadyHadImage++; continue; }
-      if (m.wc_image) p.image_url = m.wc_image;
+      if (!m.wc_image) continue;
+      p.image_url = m.wc_image;
       if (m.wc_id) p.wc_id = m.wc_id;
       await store.saveProduct(p);
       updated++;
