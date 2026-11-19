@@ -492,6 +492,56 @@ function deliveryNote(method, fee) {
   return `ပို့ခ ${fee} Ks — ပစ္စည်းရောက်မှ ပေးပါ`;
 }
 
+// Website stock (online allocation) — POS holds the physical truth; the
+// website number is how many units Pyae wants to sell ONLINE. null = not
+// managed on the website (today's behaviour: the stored in_stock boolean
+// rules, as seeded from POS). Customers never see the number, only
+// in_stock / sold out.
+function syncInStock(p) {
+  if (Array.isArray(p.options) && p.options.length) {
+    for (const o of p.options) if (o.stock != null) o.in_stock = Number(o.stock) > 0;
+    p.in_stock = p.options.some((o) => o.in_stock);
+  } else if (p.stock != null) {
+    p.in_stock = Number(p.stock) > 0;
+  }
+}
+// Returns a product id when a managed stock cannot cover the quantities, else null.
+function stockSufficient(byId, items) {
+  for (const it of items) {
+    const product = byId.get(it.product_id);
+    if (!product) continue;
+    const qty = it.qty || 0;
+    if (qty <= 0) continue;
+    if (Array.isArray(product.options) && product.options.length) {
+      const opt = product.options.find((o) => normName(o.label) === normName(it.option_label || ''));
+      if (opt && opt.stock != null && Number(opt.stock) < qty) return product.id;
+    } else if (product.stock != null && Number(product.stock) < qty) {
+      return product.id;
+    }
+  }
+  return null;
+}
+// dir -1 takes stock for an order, +1 returns it on cancel. Only managed
+// stocks (a number) move; null stays untouched. Never goes below 0.
+// Returns how many lines were managed.
+function applyStockChange(byId, items, dir) {
+  let touched = 0;
+  for (const it of items) {
+    const product = byId.get(it.product_id);
+    if (!product) continue;
+    const qty = it.qty || 0;
+    let changed = false;
+    if (Array.isArray(product.options) && product.options.length) {
+      const opt = product.options.find((o) => normName(o.label) === normName(it.option_label || ''));
+      if (opt && opt.stock != null) { opt.stock = Math.max(0, Number(opt.stock) + dir * qty); changed = true; }
+    } else if (product.stock != null) {
+      product.stock = Math.max(0, Number(product.stock) + dir * qty); changed = true;
+    }
+    if (changed) { syncInStock(product); touched++; }
+  }
+  return touched;
+}
+
 app.post('/api/orders', optionalAuth, async (req, res, next) => {
   try {
     const body = req.body || {};
@@ -558,6 +608,10 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
       });
     }
 
+    // Website stock: refuse the order when a managed stock cannot cover it.
+    const short = stockSufficient(byId, orderItems);
+    if (short) return res.status(400).json({ error: 'insufficient_stock', product_id: short });
+
     // Coupon: discount is computed on the ELIGIBLE items only (a scoped
     // coupon never discounts the whole order). Customer scope is checked
     // again here — the checkout validate step is not trusted on its own.
@@ -616,9 +670,16 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
       screenshot_path: screenshotPath,
       user_id: req.user ? req.user.id : null,
       user_phone: req.user ? req.user.phone : null,
+      stock_adjusted: false,
+      stock_returned: false,
     };
-    // NOTE: POS controls stock — placing an order does NOT change product
-    // stock here. Stock is managed in POS and re-seeded/synced separately.
+    // Website stock: a customer order takes units out of the ONLINE allocation
+    // (only for products with a managed website stock; null = unmanaged).
+    // POS still holds the physical truth — this number is what the website
+    // may still sell. Cancelled orders return their units (see status PATCH).
+    const stockTouched = applyStockChange(byId, orderItems, -1);
+    order.stock_adjusted = stockTouched > 0;
+    for (const p of [...new Set(loadedProducts)]) await store.saveProduct(p);
     await store.saveOrder(order);
 
     const { screenshot_path: _sp, ...rest } = order;
@@ -726,6 +787,26 @@ app.patch('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (re
     const { status } = req.body || {};
     if (!ORDER_STATUSES.includes(status)) return res.status(400).json({ error: 'invalid_status' });
     const oldStatus = order.status;
+    // Website stock: cancelling returns the order's units to the online
+    // allocation — but only when the goods have not gone out yet (never for a
+    // delivered order), and only for orders that actually took stock.
+    // Un-cancelling takes the units again, and refuses when too few are left.
+    const PRE_DELIVERY = ['pending', 'confirmed', 'delivering'];
+    if (order.stock_adjusted && !order.stock_returned && status === 'cancelled' && PRE_DELIVERY.includes(oldStatus)) {
+      const products = await store.listProducts();
+      const byId = new Map(products.map((p) => [p.id, p]));
+      applyStockChange(byId, order.items || [], +1);
+      for (const p of new Set((order.items || []).map((oi) => byId.get(oi.product_id)).filter(Boolean))) await store.saveProduct(p);
+      order.stock_returned = true;
+    } else if (order.stock_adjusted && order.stock_returned && oldStatus === 'cancelled' && status !== 'cancelled') {
+      const products = await store.listProducts();
+      const byId = new Map(products.map((p) => [p.id, p]));
+      const short = stockSufficient(byId, order.items || []);
+      if (short) return res.status(400).json({ error: 'insufficient_stock', product_id: short });
+      applyStockChange(byId, order.items || [], -1);
+      for (const p of new Set((order.items || []).map((oi) => byId.get(oi.product_id)).filter(Boolean))) await store.saveProduct(p);
+      order.stock_returned = false;
+    }
     order.status = status;
     order.updated_at = new Date().toISOString();
     await store.saveOrder(order);
@@ -738,8 +819,11 @@ app.patch('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (re
 // order is still open (not delivered / cancelled). Lines already in the
 // order keep their snapshot unit price — only the quantity changes; NEW
 // lines are priced at the current catalog price (sale price if set, option
-// price for option products). Stock is NOT enforced here: POS is the truth
-// and the admin knows the shop's real stock. Delivery fee is unchanged.
+// price for option products). Website stock moves with the quantity delta
+// (added units come out of the online allocation, removed units go back,
+// floored at 0) — admin edits never reject on stock, because the admin is
+// selling from real shop stock. Orders placed before stock control existed
+// (no stock_adjusted flag) leave stock untouched. Delivery fee is unchanged.
 // Total is recomputed; the coupon (if any) is re-applied to the new items.
 app.patch('/api/manage/orders/:id/items', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
@@ -814,6 +898,22 @@ app.patch('/api/manage/orders/:id/items', authMiddleware, managerMiddleware, asy
       }
     }
     const oldTotal = order.total;
+    // Website stock: move it by the quantity delta per line.
+    if (order.stock_adjusted && !order.stock_returned) {
+      const deltas = [];
+      for (const it of merged.values()) {
+        const oldLine = oldByKey.get(`${it.product_id}||${it.option_label || ''}`);
+        const delta = it.qty - (oldLine ? oldLine.qty : 0);
+        if (delta !== 0) deltas.push({ product_id: it.product_id, option_label: it.option_label || null, qty: delta });
+      }
+      for (const [key, oldLine] of oldByKey) {
+        if (!merged.has(key)) deltas.push({ product_id: oldLine.product_id, option_label: oldLine.option_label || null, qty: -oldLine.qty });
+      }
+      if (deltas.length) {
+        applyStockChange(byId, deltas, -1);
+        for (const p of new Set(deltas.map((d) => byId.get(d.product_id)).filter(Boolean))) await store.saveProduct(p);
+      }
+    }
     order.items = newItems;
     order.subtotal = subtotal;
     order.discount = discount;
@@ -1042,11 +1142,12 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
   try {
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
-    const { sale_price, is_new, best_seller, sale_featured, price, option_prices } = req.body || {};
+    const { sale_price, is_new, best_seller, sale_featured, price, option_prices, stock, option_stock } = req.body || {};
     const before = {
       price: p.price, sale_price: p.sale_price,
+      stock: p.stock ?? null,
       best_seller: Boolean(p.best_seller), sale_featured: Boolean(p.sale_featured),
-      options: Array.isArray(p.options) ? p.options.map((o) => ({ label: o.label, price: o.price })) : [],
+      options: Array.isArray(p.options) ? p.options.map((o) => ({ label: o.label, price: o.price, stock: o.stock ?? null })) : [],
     };
     if (sale_price !== undefined) {
       if (sale_price !== null && (typeof sale_price !== 'number' || sale_price < 0)) {
@@ -1075,19 +1176,42 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
       // Base price mirrors the cheapest option (what the shop grid shows).
       p.price = Math.min(...p.options.map((o) => o.price));
     }
+    // Website stock (online allocation). Empty (null) = not managed on the
+    // website — the stored in_stock boolean rules, as today. 0 = sold out.
+    // Option products keep their stock per option; the plain stock field
+    // does not apply to them.
+    if (stock !== undefined && !Array.isArray(p.options)) {
+      if (stock !== null && (!Number.isInteger(stock) || stock < 0)) {
+        return res.status(400).json({ error: 'invalid_stock' });
+      }
+      p.stock = stock;
+    }
+    if (option_stock !== undefined && Array.isArray(p.options) && p.options.length) {
+      const entries = Object.entries(option_stock);
+      for (const [label, val] of entries) {
+        if (val !== null && (!Number.isInteger(val) || val < 0)) return res.status(400).json({ error: 'invalid_stock' });
+      }
+      for (const [label, val] of entries) {
+        const opt = p.options.find((o) => normName(o.label) === normName(label));
+        if (opt) opt.stock = val;
+      }
+    }
     if (is_new !== undefined) p.is_new = Boolean(is_new);
     if (best_seller !== undefined) p.best_seller = Boolean(best_seller);
     if (sale_featured !== undefined) p.sale_featured = Boolean(sale_featured);
+    syncInStock(p);
     await store.saveProduct(p);
     const changes = [];
     if (before.price !== p.price) changes.push(`price: ${before.price} → ${p.price} Ks`);
     if (before.sale_price !== p.sale_price) changes.push(`sale price: ${before.sale_price == null ? '—' : before.sale_price} → ${p.sale_price == null ? '—' : p.sale_price} Ks`);
+    if ((before.stock ?? null) !== (p.stock ?? null)) changes.push(`stock: ${before.stock == null ? '—' : before.stock} → ${p.stock == null ? '—' : p.stock}`);
     if (before.best_seller !== Boolean(p.best_seller)) changes.push(`best seller: ${before.best_seller ? 'on' : 'off'} → ${p.best_seller ? 'on' : 'off'}`);
     if (before.sale_featured !== Boolean(p.sale_featured)) changes.push(`sale featured: ${before.sale_featured ? 'on' : 'off'} → ${p.sale_featured ? 'on' : 'off'}`);
     if (Array.isArray(p.options)) {
       for (const o of p.options) {
         const b = before.options.find((x) => normName(x.label) === normName(o.label));
         if (b && b.price !== o.price) changes.push(`${o.label}: ${b.price} → ${o.price} Ks`);
+        if (b && (b.stock ?? null) !== (o.stock ?? null)) changes.push(`${o.label} stock: ${b.stock == null ? '—' : b.stock} → ${o.stock == null ? '—' : o.stock}`);
       }
     }
     if (changes.length) await logActivity(req, 'product_update', 'product', p.id, `${p.name} — ${changes.join('; ')}`);
