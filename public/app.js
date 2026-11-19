@@ -68,6 +68,7 @@ const I18N = {
     saved: 'သိမ်းပြီးပါပြီ', deleted: 'ဖျက်ပြီးပါပြီ', confirm_delete: 'ဖျက်မှာ သေချာလား?',
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Import လုပ်မှာ သေချာလား?',
     qty: 'အရေအတွက်', stock_qty: 'Stock အရေအတွက်', price: 'ဈေး', sale_price: 'လျှော့ဈေး',
+    filter_all: 'အကုန်', filter_in_stock: 'Stock ရှိ', filter_out_stock: 'ကုန်ပြီ', filter_sale: 'လျှော့ဈေး',
     is_new: 'အသစ်', sale_featured: 'Sale ★', best_seller: 'အရောင်းရဆုံး', brand: 'Brand',
     manage_no_access: 'Manage ကို Manager အကောင့်နဲ့သာ သုံးနိုင်ပါတယ်။',
     wc_warn: 'key ကို chat မှာ ဘယ်တော့မှ မပို့ပါနဲ့',
@@ -173,6 +174,7 @@ const I18N = {
     saved: 'Saved', deleted: 'Deleted', confirm_delete: 'Are you sure you want to delete this?',
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Are you sure you want to run the import?',
     qty: 'Quantity', stock_qty: 'Stock qty', price: 'Price', sale_price: 'Sale price',
+    filter_all: 'All', filter_in_stock: 'In Stock', filter_out_stock: 'Sold Out', filter_sale: 'On Sale',
     is_new: 'New', sale_featured: 'Sale ★', best_seller: 'Best seller', brand: 'Brand',
     manage_no_access: 'Manage is only available to the manager account.',
     wc_warn: 'Never send your key in chat',
@@ -1825,10 +1827,15 @@ async function renderManageCatalog(body) {
     '<div class="mg-card"><div class="row-flex">' +
     '<input id="mgSearch" type="search" placeholder="' + esc(t('search_products')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
     '<button class="btn btn-primary" type="button" id="mgSearchBtn">' + esc(t('search_btn')) + '</button>' +
+    '</div><div class="chips" style="margin-top:10px" id="mgFilterChips">' +
+    '<button type="button" class="chip active" data-mgfilter="all">' + esc(t('filter_all')) + ' <span data-mgcount="all"></span></button>' +
+    '<button type="button" class="chip" data-mgfilter="in">' + esc(t('filter_in_stock')) + ' <span data-mgcount="in_stock"></span></button>' +
+    '<button type="button" class="chip" data-mgfilter="out">' + esc(t('filter_out_stock')) + ' <span data-mgcount="out_stock"></span></button>' +
+    '<button type="button" class="chip" data-mgfilter="sale">' + esc(t('filter_sale')) + ' <span data-mgcount="sale"></span></button>' +
     '</div><div id="mgTableWrap" class="table-wrap" style="margin-top:12px"></div>' +
     '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgMoreBtn">' + esc(t('more')) + '</button></div>' +
     '<input id="mgPhotoInput" type="file" accept="image/*" hidden></div>';
-  mgCatalog = { q: '', offset: 0, items: [] };
+  mgCatalog = { q: '', filter: 'all', offset: 0, items: [] };
   const doSearch = () => {
     mgCatalog.q = $('#mgSearch').value.trim();
     mgCatalog.offset = 0; mgCatalog.items = [];
@@ -1836,6 +1843,14 @@ async function renderManageCatalog(body) {
   };
   $('#mgSearchBtn').addEventListener('click', doSearch);
   $('#mgSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  // Status filter: one list, one tap — and it combines with the search above
+  // (e.g. ANUA + ကုန်ပြီ finds the ANUA items to restock). The reset reloads
+  // from offset 0, so the list can never vanish the way it did in v15.
+  $$('[data-mgfilter]').forEach((b) => b.addEventListener('click', () => {
+    mgCatalog.filter = b.dataset.mgfilter;
+    $$('[data-mgfilter]').forEach((x) => x.classList.toggle('active', x === b));
+    loadMgCatalog(true);
+  }));
   $('#mgMoreBtn').addEventListener('click', () => loadMgCatalog(false));
   $('#mgPhotoInput').addEventListener('change', async () => {
     const input = $('#mgPhotoInput');
@@ -1883,9 +1898,17 @@ async function loadMgCatalog(reset) {
   if (reset) { mgCatalog.offset = 0; mgCatalog.items = []; wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>'; }
   const params = new URLSearchParams({ limit: String(PAGE), offset: String(mgCatalog.offset) });
   if (mgCatalog.q) params.set('q', mgCatalog.q);
+  if (mgCatalog.filter === 'in' || mgCatalog.filter === 'out') params.set('stock', mgCatalog.filter);
+  if (mgCatalog.filter === 'sale') params.set('sale', '1');
   try {
     const data = await api('/manage/products?' + params.toString());
     const items = data.items || [];
+    if (data.counts) {
+      for (const [k, v] of Object.entries(data.counts)) {
+        const el = document.querySelector('[data-mgcount="' + k + '"]');
+        if (el) el.textContent = '(' + v + ')';
+      }
+    }
     if (reset) mgCatalog.items = items; else mgCatalog.items = mgCatalog.items.concat(items);
     mgCatalog.offset += items.length;
     $('#mgMoreBtn').style.display = (data.total != null && mgCatalog.offset < data.total) ? '' : 'none';
