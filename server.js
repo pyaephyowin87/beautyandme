@@ -65,7 +65,7 @@ function newToken() {
 }
 
 async function publicUser(user) {
-  return { id: user.id, name: user.name, phone: user.phone, is_manager: await isManagerPhone(user.phone) };
+  return { id: user.id, name: user.name, phone: user.phone, is_manager: await isManagerPhone(user.phone), is_owner: user.phone === MANAGER_PHONE };
 }
 
 // Product type, derived from the product name. The POS category field is
@@ -569,17 +569,17 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
       if (!(await store.getOrder(orderId))) break;
     }
 
-    // Payment screenshot (transfer only): save file, never echo the data back.
+    // Payment screenshot (transfer only): stored in the database, never
+    // echoed back. Disk storage used to lose every screenshot on redeploy
+    // (Render's free disk is wiped), while the order still claimed one.
     let screenshotPath = null;
     if (payment.screenshot_data) {
       const m = String(payment.screenshot_data).match(/^data:(image\/[a-z]+);base64,(.+)$/);
       if (!m) return res.status(400).json({ error: 'invalid_screenshot' });
       const buf = Buffer.from(m[2], 'base64');
       if (buf.length > 2 * 1024 * 1024) return res.status(400).json({ error: 'screenshot_too_large' });
-      fs.mkdirSync(store.uploadsDir, { recursive: true });
-      const filePath = path.join(store.uploadsDir, `${orderId}.jpg`);
-      fs.writeFileSync(filePath, buf);
-      screenshotPath = `data/uploads/${orderId}.jpg`;
+      await store.saveScreenshot(orderId, payment.screenshot_data);
+      screenshotPath = 'db';
     }
 
     const order = {
@@ -715,16 +715,28 @@ app.patch('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (re
   } catch (err) { return next(err); }
 });
 
-// Payment screenshot — manager only, streamed from the file this order
-// recorded. Never listed in any customer response.
+// Payment screenshot — manager only. Served from the database first
+// (screenshots are stored there since 2026-11-19); falls back to the old
+// disk file for orders placed before that change. Never listed in any
+// customer response.
 app.get('/api/manage/orders/:id/screenshot', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
     const order = await store.getOrder(req.params.id);
     if (!order || !order.screenshot_path) return res.status(404).json({ error: 'screenshot_not_found' });
+    const shot = await store.getScreenshot(order.id);
+    if (shot) {
+      const m = String(shot).match(/^data:(image\/[a-z]+);base64,(.+)$/);
+      if (m) {
+        res.setHeader('Content-Type', m[1]);
+        return res.send(Buffer.from(m[2], 'base64'));
+      }
+    }
     const file = path.join(store.uploadsDir, `${order.id}.jpg`);
-    if (!fs.existsSync(file)) return res.status(404).json({ error: 'screenshot_not_found' });
-    res.setHeader('Content-Type', 'image/jpeg');
-    return res.sendFile(file);
+    if (fs.existsSync(file)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.sendFile(file);
+    }
+    return res.status(404).json({ error: 'screenshot_not_found' });
   } catch (err) { return next(err); }
 });
 
@@ -851,12 +863,33 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
   try {
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
-    const { sale_price, is_new, best_seller, sale_featured } = req.body || {};
+    const { sale_price, is_new, best_seller, sale_featured, price, option_prices } = req.body || {};
     if (sale_price !== undefined) {
       if (sale_price !== null && (typeof sale_price !== 'number' || sale_price < 0)) {
         return res.status(400).json({ error: 'invalid_sale_price' });
       }
       p.sale_price = sale_price;
+    }
+    // Selling price. For products with options the customer pays the
+    // OPTION price, so the base price is not editable there — option prices
+    // are edited per option below, and the base price mirrors the cheapest.
+    if (price !== undefined && !Array.isArray(p.options)) {
+      if (typeof price !== 'number' || price <= 0) {
+        return res.status(400).json({ error: 'invalid_price' });
+      }
+      p.price = price;
+    }
+    if (option_prices !== undefined && Array.isArray(p.options) && p.options.length) {
+      const entries = Object.entries(option_prices);
+      for (const [label, val] of entries) {
+        if (typeof val !== 'number' || val <= 0) return res.status(400).json({ error: 'invalid_price' });
+      }
+      for (const [label, val] of entries) {
+        const opt = p.options.find((o) => normName(o.label) === normName(label));
+        if (opt) opt.price = val;
+      }
+      // Base price mirrors the cheapest option (what the shop grid shows).
+      p.price = Math.min(...p.options.map((o) => o.price));
     }
     if (is_new !== undefined) p.is_new = Boolean(is_new);
     if (best_seller !== undefined) p.best_seller = Boolean(best_seller);
@@ -928,11 +961,11 @@ app.delete('/api/manage/coupons/:code', authMiddleware, managerMiddleware, async
   } catch (err) { return next(err); }
 });
 
-app.get('/api/manage/payments', authMiddleware, managerMiddleware, async (_req, res, next) => {
+app.get('/api/manage/payments', authMiddleware, ownerMiddleware, async (_req, res, next) => {
   try { return res.json(await store.listPayments()); } catch (err) { return next(err); }
 });
 
-app.put('/api/manage/payments', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.put('/api/manage/payments', authMiddleware, ownerMiddleware, async (req, res, next) => {
   try {
     const accounts = req.body;
     if (!Array.isArray(accounts)) return res.status(400).json({ error: 'array_required' });
@@ -950,14 +983,14 @@ app.put('/api/manage/payments', authMiddleware, managerMiddleware, async (req, r
   } catch (err) { return next(err); }
 });
 
-app.get('/api/manage/app-links', authMiddleware, managerMiddleware, async (_req, res, next) => {
+app.get('/api/manage/app-links', authMiddleware, ownerMiddleware, async (_req, res, next) => {
   try {
     const links = (await store.getSetting('app_links')) || {};
     return res.json({ play_store_url: links.play_store_url || '', app_store_url: links.app_store_url || '' });
   } catch (err) { return next(err); }
 });
 
-app.put('/api/manage/app-links', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.put('/api/manage/app-links', authMiddleware, ownerMiddleware, async (req, res, next) => {
   try {
     const { play_store_url = '', app_store_url = '' } = req.body || {};
     const links = { play_store_url: String(play_store_url), app_store_url: String(app_store_url) };
@@ -966,7 +999,7 @@ app.put('/api/manage/app-links', authMiddleware, managerMiddleware, async (req, 
   } catch (err) { return next(err); }
 });
 
-app.get('/api/manage/settings/woocommerce', authMiddleware, managerMiddleware, async (_req, res, next) => {
+app.get('/api/manage/settings/woocommerce', authMiddleware, ownerMiddleware, async (_req, res, next) => {
   try {
     const wc = await getWooConfig();
     return res.json({
@@ -978,7 +1011,7 @@ app.get('/api/manage/settings/woocommerce', authMiddleware, managerMiddleware, a
   } catch (err) { return next(err); }
 });
 
-app.put('/api/manage/settings/woocommerce', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.put('/api/manage/settings/woocommerce', authMiddleware, ownerMiddleware, async (req, res, next) => {
   try {
     const { site_url, consumer_key, consumer_secret } = req.body || {};
     const current = (await store.getSetting('woocommerce')) || {};
@@ -997,7 +1030,7 @@ app.put('/api/manage/settings/woocommerce', authMiddleware, managerMiddleware, a
   } catch (err) { return next(err); }
 });
 
-app.post('/api/manage/woocommerce/test', authMiddleware, managerMiddleware, async (_req, res, next) => {
+app.post('/api/manage/woocommerce/test', authMiddleware, ownerMiddleware, async (_req, res, next) => {
   try {
     const wc = await getWooConfig();
     if (!wc.site_url || !wc.consumer_key || !wc.consumer_secret) {
@@ -1128,7 +1161,7 @@ function createWooJob(kind) {
   return job;
 }
 
-app.post('/api/manage/woocommerce/preview', authMiddleware, managerMiddleware, async (_req, res) => {
+app.post('/api/manage/woocommerce/preview', authMiddleware, ownerMiddleware, async (_req, res) => {
   const job = createWooJob('preview');
   runWcPreview((page, totalPages) => { job.progress = { page, total_pages: totalPages }; })
     .then((result) => { job.status = 'done'; job.result = result; })
@@ -1136,13 +1169,13 @@ app.post('/api/manage/woocommerce/preview', authMiddleware, managerMiddleware, a
   return res.json({ job_id: job.id, status: 'running' });
 });
 
-app.get('/api/manage/woocommerce/jobs/:id', authMiddleware, managerMiddleware, (req, res) => {
+app.get('/api/manage/woocommerce/jobs/:id', authMiddleware, ownerMiddleware, (req, res) => {
   const job = wooJobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: 'job_not_found' });
   return res.json(job);
 });
 
-app.post('/api/manage/woocommerce/import', authMiddleware, managerMiddleware, async (_req, res) => {
+app.post('/api/manage/woocommerce/import', authMiddleware, ownerMiddleware, async (_req, res) => {
   const job = createWooJob('import');
   (async () => {
     const preview = await runWcPreview((page, totalPages) => { job.progress = { page, total_pages: totalPages, phase: 'fetch' }; });
@@ -1177,7 +1210,7 @@ app.post('/api/manage/woocommerce/import', authMiddleware, managerMiddleware, as
 // the manager session, over HTTPS, and lives in browser memory only —
 // never stored in the browser. (The server-side jobs above stay as a
 // fallback for a future host that is not geo-blocked.)
-app.get('/api/manage/woocommerce/credentials', authMiddleware, managerMiddleware, async (_req, res, next) => {
+app.get('/api/manage/woocommerce/credentials', authMiddleware, ownerMiddleware, async (_req, res, next) => {
   try {
     const wc = await getWooConfig();
     if (!wc.site_url || !wc.consumer_key || !wc.consumer_secret) {
@@ -1187,7 +1220,7 @@ app.get('/api/manage/woocommerce/credentials', authMiddleware, managerMiddleware
   } catch (err) { return next(err); }
 });
 
-app.post('/api/manage/woocommerce/preview-data', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.post('/api/manage/woocommerce/preview-data', authMiddleware, ownerMiddleware, async (req, res, next) => {
   try {
     const wcProducts = req.body && Array.isArray(req.body.wc_products) ? req.body.wc_products : null;
     if (!wcProducts) return res.status(400).json({ error: 'wc_products_required' });
@@ -1195,7 +1228,7 @@ app.post('/api/manage/woocommerce/preview-data', authMiddleware, managerMiddlewa
   } catch (err) { return next(err); }
 });
 
-app.post('/api/manage/woocommerce/import-data', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.post('/api/manage/woocommerce/import-data', authMiddleware, ownerMiddleware, async (req, res, next) => {
   try {
     const matched = req.body && Array.isArray(req.body.matched) ? req.body.matched : null;
     if (!matched) return res.status(400).json({ error: 'matched_required' });
