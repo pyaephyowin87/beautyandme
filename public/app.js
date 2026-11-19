@@ -84,6 +84,16 @@ const I18N = {
     note: 'မှတ်ချက်', play_store: 'Play Store လင့်', app_store: 'App Store လင့်',
     delivery_fee: 'ပို့ခ', pay_on_delivery: 'ပစ္စည်းရောက်မှ ပေးပါ',
     status: 'အခြေအနေ', date: 'ရက်စွဲ', items: 'ပစ္စည်းများ',
+    status_pending: 'စောင့်ဆိုင်းနေတယ်', status_confirmed: 'အတည်ပြုပြီး', status_delivering: 'ပို့နေတယ်', status_delivered: 'ပို့ပြီးပြီ', status_cancelled: 'ပယ်ဖျက်ပြီး',
+    search_orders: 'အော်ဒါ နံပါတ် / နာမည် / ဖုန်း ရှာမယ်…', search_users: 'နာမည် / ဖုန်း ရှာမယ်…',
+    all_statuses: 'Status အားလုံး', change_status: 'Status ပြောင်းမယ်', status_changed: 'Status ပြောင်းပြီးပါပြီ',
+    screenshot: 'ငွေလွှဲ Screenshot', no_screenshot: 'Screenshot မရှိပါ',
+    new_password: 'Password အသစ်', set_password: 'Password ချိန်းမယ်', password_changed: 'Password အသစ် ချိန်းပြီးပါပြီ — customer ကို အသစ်ကို ပြောပေးပါ',
+    manager: 'Manager', owner: 'Owner', make_manager: 'Manager ပေးမယ်', remove_manager: 'Manager ဖြုတ်မယ်',
+    managers_title: 'Manager များ', add_manager_ph: 'ဖုန်းနံပါတ် ထည့်ပါ (အရင် register လုပ်ထားရမယ်)',
+    user_not_found: 'ဒီဖုန်းနဲ့ အကောင့် မရှိသေးပါ — အရင် register လုပ်ခိုင်းပါ',
+    owner_only: 'Owner (095117366) ပဲ လုပ်နိုင်ပါတယ်', no_users: 'User မရှိသေးပါ',
+    pw_reset_hint: 'ချိန်းပြီးရင် customer ကို Messenger / ဖုန်း နဲ့ password အသစ်ကို ပြောပေးပါ — customer က အသစ်နဲ့ ပြန်ဝင်ရမယ်',
     shop_phone: 'ဖုန်း', shop_hours: 'ဖွင့်ချိန် — နေ့စဉ် မနက် ၉ နာရီ မှ ညနေ ၆ နာရီ',
     continue_shopping: 'ဆက်ပြီး ဈေးဝယ်မယ်', back_home: 'Home ပြန်မယ်',
     select_option: 'Option ရွေးပါ', search_products: 'ပစ္စည်း ရှာမယ်…',
@@ -164,6 +174,16 @@ const I18N = {
     note: 'Note', play_store: 'Play Store link', app_store: 'App Store link',
     delivery_fee: 'Delivery fee', pay_on_delivery: 'Pay on delivery',
     status: 'Status', date: 'Date', items: 'Items',
+    status_pending: 'Pending', status_confirmed: 'Confirmed', status_delivering: 'Delivering', status_delivered: 'Delivered', status_cancelled: 'Cancelled',
+    search_orders: 'Search order no. / name / phone…', search_users: 'Search name / phone…',
+    all_statuses: 'All statuses', change_status: 'Change status', status_changed: 'Status updated',
+    screenshot: 'Payment screenshot', no_screenshot: 'No screenshot',
+    new_password: 'New password', set_password: 'Set password', password_changed: 'Password changed — tell the customer the new one',
+    manager: 'Manager', owner: 'Owner', make_manager: 'Make manager', remove_manager: 'Remove manager',
+    managers_title: 'Managers', add_manager_ph: 'Enter phone number (must be registered first)',
+    user_not_found: 'No account with this phone — ask them to register first',
+    owner_only: 'Only the owner (095117366) can do this', no_users: 'No users yet',
+    pw_reset_hint: 'After changing, tell the customer the new password by Messenger / phone — they will sign in again with it',
     shop_phone: 'Phone', shop_hours: 'Open daily 9 AM – 6 PM',
     continue_shopping: 'Continue shopping', back_home: 'Back to Home',
     select_option: 'Choose an option', search_products: 'Search products…',
@@ -1170,6 +1190,10 @@ async function changePassword() {
 }
 
 /* ---------------- orders ---------------- */
+const ORDER_STATUSES = ['pending', 'confirmed', 'delivering', 'delivered', 'cancelled'];
+function statusLabel(status) {
+  return t('status_' + (ORDER_STATUSES.includes(status) ? status : 'pending'));
+}
 async function loadOrders() {
   const list = $('#ordersList');
   if (!state.user) {
@@ -1185,7 +1209,7 @@ async function loadOrders() {
     if (!orders.length) { list.innerHTML = '<div class="empty">' + esc(t('no_orders')) + '</div>'; return; }
     list.innerHTML = orders.map((o) =>
       '<button type="button" class="order-card" data-order="' + esc(String(o.id)) + '">' +
-      '<span class="oc-top"><span>' + esc(o.id) + '</span><span class="status-pill">' + esc(o.status || '') + '</span></span>' +
+      '<span class="oc-top"><span>' + esc(o.id) + '</span><span class="status-pill">' + esc(statusLabel(o.status)) + '</span></span>' +
       '<div class="oc-meta">' + esc(fmtDate(o.created_at)) + ' • ' + esc(t('total')) + ': ' + fmt(o.total) + '</div>' +
       (o.delivery_note ? '<div class="oc-meta">' + esc(o.delivery_note) + '</div>' : '') +
       '</button>').join('');
@@ -1204,7 +1228,7 @@ async function openOrderDetail(id) {
     const c = o.customer || {};
     $('#orderBody').innerHTML =
       '<div class="line"><span>' + esc(t('order_id')) + '</span><strong>' + esc(o.id) + '</strong></div>' +
-      '<div class="line"><span>' + esc(t('status')) + '</span><span class="status-pill">' + esc(o.status || '') + '</span></div>' +
+      '<div class="line"><span>' + esc(t('status')) + '</span><span class="status-pill">' + esc(statusLabel(o.status)) + '</span></div>' +
       '<div class="line"><span>' + esc(t('date')) + '</span><span>' + esc(fmtDate(o.created_at)) + '</span></div>' +
       ((c.name || c.phone || c.address) ?
         '<hr>' +
@@ -1237,12 +1261,252 @@ function loadManage(tab) {
     return;
   }
   if (tab === 'dashboard') renderManageDashboard(body);
+  else if (tab === 'orders') renderManageOrders(body);
+  else if (tab === 'users') renderManageUsers(body);
   else if (tab === 'catalog') renderManageCatalog(body);
   else if (tab === 'coupons') renderManageCoupons(body);
   else if (tab === 'payments') renderManagePayments(body);
   else if (tab === 'applink') renderManageAppLinks(body);
   else if (tab === 'woocommerce') renderManageWoo(body);
 }
+/* ---------------- manage: orders ---------------- */
+let mgOrders = { q: '', status: '', offset: 0, items: [] };
+async function renderManageOrders(body) {
+  body.innerHTML =
+    '<div class="mg-card"><div class="row-flex">' +
+    '<input id="mgOrderSearch" type="search" placeholder="' + esc(t('search_orders')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
+    '<select id="mgOrderStatus" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px">' +
+    '<option value="">' + esc(t('all_statuses')) + '</option>' +
+    ORDER_STATUSES.map((s) => '<option value="' + s + '">' + esc(statusLabel(s)) + '</option>').join('') +
+    '</select>' +
+    '<button class="btn btn-primary" type="button" id="mgOrderSearchBtn">' + esc(t('search_btn')) + '</button>' +
+    '</div><div id="mgOrderWrap" style="margin-top:12px"></div>' +
+    '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgOrderMoreBtn">' + esc(t('more')) + '</button></div></div>';
+  mgOrders = { q: '', status: '', offset: 0, items: [] };
+  const doSearch = () => {
+    mgOrders.q = $('#mgOrderSearch').value.trim();
+    mgOrders.status = $('#mgOrderStatus').value;
+    mgOrders.offset = 0; mgOrders.items = [];
+    loadMgOrders(true);
+  };
+  $('#mgOrderSearchBtn').addEventListener('click', doSearch);
+  $('#mgOrderSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  $('#mgOrderStatus').addEventListener('change', doSearch);
+  $('#mgOrderMoreBtn').addEventListener('click', () => loadMgOrders(false));
+  loadMgOrders(true);
+}
+async function loadMgOrders(reset) {
+  const wrap = $('#mgOrderWrap');
+  if (!wrap) return;
+  if (reset) wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  const params = new URLSearchParams({ limit: String(PAGE), offset: String(mgOrders.offset) });
+  if (mgOrders.q) params.set('q', mgOrders.q);
+  if (mgOrders.status) params.set('status', mgOrders.status);
+  try {
+    const data = await api('/manage/orders?' + params.toString());
+    const items = data.orders || [];
+    if (reset) mgOrders.items = items; else mgOrders.items = mgOrders.items.concat(items);
+    mgOrders.offset += items.length;
+    const moreBtn = $('#mgOrderMoreBtn');
+    if (moreBtn) moreBtn.style.display = (data.total != null && mgOrders.offset < data.total) ? '' : 'none';
+    if (!mgOrders.items.length) { wrap.innerHTML = '<div class="empty">' + esc(t('no_orders')) + '</div>'; return; }
+    wrap.innerHTML = mgOrders.items.map((o) =>
+      '<button type="button" class="order-card" data-mgorder="' + esc(String(o.id)) + '">' +
+      '<span class="oc-top"><span>' + esc(o.id) + '</span><span class="status-pill">' + esc(statusLabel(o.status)) + '</span></span>' +
+      '<div class="oc-meta">' + esc(fmtDate(o.created_at)) + ' • ' + esc((o.customer && o.customer.name) || '') + ' • ' + esc((o.customer && o.customer.phone) || '') + '</div>' +
+      '<div class="oc-meta">' + esc(t('total')) + ': ' + fmt(o.total) + (o.payment && o.payment.method ? ' • ' + esc(t(o.payment.method)) : '') + (o.has_screenshot ? ' • ' + esc(t('screenshot')) : '') + '</div>' +
+      '</button>').join('');
+    $$('[data-mgorder]', wrap).forEach((b) => b.addEventListener('click', () => openAdminOrder(b.dataset.mgorder)));
+  } catch (e) {
+    wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
+async function openAdminOrder(id) {
+  openOverlay('#orderOverlay', '#orderModal');
+  $('#orderBody').innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  try {
+    const data = await api('/manage/orders/' + encodeURIComponent(id));
+    const o = data.order || data;
+    const items = o.items || [];
+    const c = o.customer || {};
+    const pay = o.payment || {};
+    $('#orderBody').innerHTML =
+      '<div class="line"><span>' + esc(t('order_id')) + '</span><strong>' + esc(o.id) + '</strong></div>' +
+      '<div class="line"><span>' + esc(t('status')) + '</span><span class="status-pill" id="adminOrderPill">' + esc(statusLabel(o.status)) + '</span></div>' +
+      '<div class="line"><span>' + esc(t('date')) + '</span><span>' + esc(fmtDate(o.created_at)) + '</span></div>' +
+      ((c.name || c.phone || c.address) ?
+        '<hr>' +
+        (c.name ? '<div class="line"><span>' + esc(t('name')) + '</span><strong>' + esc(c.name) + '</strong></div>' : '') +
+        (c.phone ? '<div class="line"><span>' + esc(t('phone')) + '</span><span>' + esc(c.phone) + '</span></div>' : '') +
+        (c.address ? '<div class="line"><span>' + esc(t('address')) + '</span><span>' + esc(c.address) + '</span></div>' : '') : '') +
+      (o.delivery && o.delivery.method ? '<div class="line"><span>' + esc(t('delivery')) + '</span><strong>' + esc(deliveryLabel(o.delivery.method)) + '</strong></div>' : '') +
+      (pay.method ? '<div class="line"><span>' + esc(t('payment')) + '</span><span>' + esc(t(pay.method)) + (pay.account ? ' — ' + esc(pay.account) : '') + '</span></div>' : '') +
+      '<hr>' +
+      items.map((it) => {
+        const lineTotal = it.line_total != null ? it.line_total : (it.unit_price != null ? it.unit_price : (it.price || 0)) * (it.qty || 1);
+        return '<div class="line"><span>' + esc(it.product_name || it.name || it.product_id) + (it.option_label ? ' (' + esc(it.option_label) + ')' : '') + ' × ' + (it.qty || 1) + '</span><span>' + fmt(lineTotal) + '</span></div>';
+      }).join('') +
+      '<hr>' +
+      '<div class="line"><span>' + esc(t('subtotal')) + '</span><span>' + fmt(o.subtotal) + '</span></div>' +
+      (o.discount ? '<div class="line"><span>' + esc(t('discount')) + '</span><span>−' + fmt(o.discount) + '</span></div>' : '') +
+      '<div class="line"><strong>' + esc(t('total')) + '</strong><strong>' + fmt(o.total) + '</strong></div>' +
+      '<div class="delivery-line">' + esc(o.delivery_note || (o.delivery_fee != null && o.delivery_fee > 0 ? t('delivery_fee') + ' ' + fmt(o.delivery_fee) + ' — ' + t('pay_on_delivery') : '')) + '</div>' +
+      (o.has_screenshot
+        ? '<hr><div style="font-weight:700;margin-bottom:8px">' + esc(t('screenshot')) + '</div><img id="adminShotImg" alt="" style="width:100%;border-radius:10px;border:1px solid var(--line)" hidden>'
+        : '<hr><div class="empty">' + esc(t('no_screenshot')) + '</div>') +
+      '<hr><div style="font-weight:700;margin-bottom:8px">' + esc(t('change_status')) + '</div>' +
+      '<div class="row-flex" style="flex-wrap:wrap">' + ORDER_STATUSES.map((s) =>
+        '<button type="button" class="btn ' + (o.status === s ? 'btn-primary' : 'btn-outline') + '" data-mgstatus="' + s + '">' + esc(statusLabel(s)) + '</button>').join('') + '</div>';
+    if (o.has_screenshot) loadAdminScreenshot(o.id);
+    $$('[data-mgstatus]').forEach((btn) => btn.addEventListener('click', async () => {
+      try {
+        const res = await api('/manage/orders/' + encodeURIComponent(o.id), { method: 'PATCH', body: JSON.stringify({ status: btn.dataset.mgstatus }) });
+        const pill = $('#adminOrderPill');
+        if (pill) pill.textContent = statusLabel(res.order.status);
+        $$('[data-mgstatus]').forEach((b) => {
+          b.classList.toggle('btn-primary', b.dataset.mgstatus === res.order.status);
+          b.classList.toggle('btn-outline', b.dataset.mgstatus !== res.order.status);
+        });
+        toast(t('status_changed'));
+        loadMgOrders(true);
+      } catch (e) { toast(t('error_load')); }
+    }));
+  } catch (e) {
+    $('#orderBody').innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
+async function loadAdminScreenshot(orderId) {
+  try {
+    const res = await fetch('/api/manage/orders/' + encodeURIComponent(orderId) + '/screenshot', { headers: { 'Authorization': 'Bearer ' + state.token } });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const img = $('#adminShotImg');
+    if (img) { img.src = URL.createObjectURL(blob); img.hidden = false; }
+  } catch (e) { /* no screenshot to show */ }
+}
+
+/* ---------------- manage: users ---------------- */
+let mgUsers = { q: '', offset: 0, items: [] };
+async function renderManageUsers(body) {
+  const isOwner = state.user && state.user.phone === '095117366';
+  body.innerHTML =
+    (isOwner ? '<div class="mg-card"><h3>' + esc(t('managers_title')) + '</h3><div id="mgManagersWrap"><div class="loading">' + esc(t('loading')) + '</div></div>' +
+      '<div class="row-flex" style="margin-top:12px"><input id="mgAddManagerPhone" type="tel" placeholder="' + esc(t('add_manager_ph')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
+      '<button class="btn btn-primary" type="button" id="mgAddManagerBtn">' + esc(t('add')) + '</button></div></div>' : '') +
+    '<div class="mg-card"><div class="row-flex">' +
+    '<input id="mgUserSearch" type="search" placeholder="' + esc(t('search_users')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
+    '<button class="btn btn-primary" type="button" id="mgUserSearchBtn">' + esc(t('search_btn')) + '</button>' +
+    '</div><div id="mgUserWrap" style="margin-top:12px"></div>' +
+    '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgUserMoreBtn">' + esc(t('more')) + '</button></div></div>';
+  mgUsers = { q: '', offset: 0, items: [] };
+  const doSearch = () => {
+    mgUsers.q = $('#mgUserSearch').value.trim();
+    mgUsers.offset = 0; mgUsers.items = [];
+    loadMgUsers(true);
+  };
+  $('#mgUserSearchBtn').addEventListener('click', doSearch);
+  $('#mgUserSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  $('#mgUserMoreBtn').addEventListener('click', () => loadMgUsers(false));
+  if (isOwner) {
+    loadMgManagers();
+    $('#mgAddManagerBtn').addEventListener('click', async () => {
+      const phone = $('#mgAddManagerPhone').value.trim();
+      if (!phone) return;
+      try {
+        await api('/manage/managers', { method: 'POST', body: JSON.stringify({ phone }) });
+        $('#mgAddManagerPhone').value = '';
+        toast(t('saved'));
+        loadMgManagers();
+        loadMgUsers(true);
+      } catch (e) {
+        toast(e.status === 404 ? t('user_not_found') : t('error_load'));
+      }
+    });
+  }
+  loadMgUsers(true);
+}
+async function loadMgManagers() {
+  const wrap = $('#mgManagersWrap');
+  if (!wrap) return;
+  try {
+    const data = await api('/manage/managers');
+    const list = data.managers || [];
+    wrap.innerHTML = '<div class="kv-row"><span>' + esc(t('owner')) + '</span><strong>095117366</strong></div>' +
+      (list.length ? list.map((m) =>
+        '<div class="kv-row"><span><strong>' + esc(m.name || m.phone) + '</strong> — ' + esc(m.phone) + '</span><button type="button" class="btn btn-outline" data-mgdel="' + esc(m.phone) + '">' + esc(t('remove_manager')) + '</button></div>').join('')
+        : '<div class="empty">' + esc(t('no_users')) + '</div>');
+    $$('[data-mgdel]', wrap).forEach((b) => b.addEventListener('click', async () => {
+      try {
+        await api('/manage/managers/' + encodeURIComponent(b.dataset.mgdel), { method: 'DELETE' });
+        toast(t('deleted'));
+        loadMgManagers();
+        loadMgUsers(true);
+      } catch (e) { toast(t('error_load')); }
+    }));
+  } catch (e) {
+    wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
+async function loadMgUsers(reset) {
+  const wrap = $('#mgUserWrap');
+  if (!wrap) return;
+  if (reset) wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  const params = new URLSearchParams({ limit: String(PAGE), offset: String(mgUsers.offset) });
+  if (mgUsers.q) params.set('q', mgUsers.q);
+  const isOwner = state.user && state.user.phone === '095117366';
+  try {
+    const data = await api('/manage/users?' + params.toString());
+    const items = data.users || [];
+    if (reset) mgUsers.items = items; else mgUsers.items = mgUsers.items.concat(items);
+    mgUsers.offset += items.length;
+    const moreBtn = $('#mgUserMoreBtn');
+    if (moreBtn) moreBtn.style.display = (data.total != null && mgUsers.offset < data.total) ? '' : 'none';
+    if (!mgUsers.items.length) { wrap.innerHTML = '<div class="empty">' + esc(t('no_users')) + '</div>'; return; }
+    wrap.innerHTML = mgUsers.items.map((u) =>
+      '<div class="mg-card" style="margin-bottom:10px"><div class="kv-row"><span><strong>' + esc(u.name || '') + '</strong> — ' + esc(u.phone) + '</span><span>' + esc(t('orders')) + ': ' + (u.orders_count || 0) + '</span></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">' +
+      (u.is_owner ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('owner')) + '</span>' : '') +
+      (u.is_manager && !u.is_owner ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('manager')) + '</span>' : '') +
+      '</div>' +
+      '<div class="row-flex" style="margin-top:10px;flex-wrap:wrap">' +
+      '<button type="button" class="btn btn-outline" data-mgpw="' + esc(u.phone) + '">' + esc(t('set_password')) + '</button>' +
+      (isOwner && !u.is_owner ? '<button type="button" class="btn btn-outline" data-mgmgr="' + esc(u.phone) + '" data-ismgr="' + (u.is_manager ? '1' : '0') + '">' + esc(u.is_manager ? t('remove_manager') : t('make_manager')) + '</button>' : '') +
+      '</div>' +
+      '<div data-pwform="' + esc(u.phone) + '" hidden style="margin-top:10px"><div class="row-flex">' +
+      '<input type="text" placeholder="' + esc(t('new_password')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:140px">' +
+      '<button type="button" class="btn btn-primary" data-pwsave="' + esc(u.phone) + '">' + esc(t('save')) + '</button>' +
+      '</div><div style="margin-top:6px;color:var(--muted);font-size:13px">' + esc(t('pw_reset_hint')) + '</div></div>' +
+      '</div>').join('');
+    $$('[data-mgpw]', wrap).forEach((b) => b.addEventListener('click', () => {
+      const form = wrap.querySelector('[data-pwform="' + b.dataset.mgpw + '"]');
+      if (form) form.hidden = !form.hidden;
+    }));
+    $$('[data-pwsave]', wrap).forEach((b) => b.addEventListener('click', async () => {
+      const form = wrap.querySelector('[data-pwform="' + b.dataset.pwsave + '"]');
+      const inp = form ? form.querySelector('input') : null;
+      const val = inp ? inp.value.trim() : '';
+      if (val.length < 4) { toast(t('password_too_short')); return; }
+      try {
+        await api('/manage/users/' + encodeURIComponent(b.dataset.pwsave) + '/password', { method: 'PATCH', body: JSON.stringify({ password: val }) });
+        toast(t('password_changed'));
+        if (form) form.hidden = true;
+        if (inp) inp.value = '';
+      } catch (e) { toast(e.status === 403 ? t('owner_only') : t('error_load')); }
+    }));
+    $$('[data-mgmgr]', wrap).forEach((b) => b.addEventListener('click', async () => {
+      try {
+        if (b.dataset.ismgr === '1') await api('/manage/managers/' + encodeURIComponent(b.dataset.mgmgr), { method: 'DELETE' });
+        else await api('/manage/managers', { method: 'POST', body: JSON.stringify({ phone: b.dataset.mgmgr }) });
+        toast(t('saved'));
+        loadMgManagers();
+        loadMgUsers(true);
+      } catch (e) { toast(e.status === 404 ? t('user_not_found') : t('error_load')); }
+    }));
+  } catch (e) {
+    wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
+
 async function renderManageDashboard(body) {
   body.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
   try {
