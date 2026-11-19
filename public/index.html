@@ -76,6 +76,12 @@
     <div id="ordersList"></div>
   </section>
 
+  <!-- ACCOUNT VIEW -->
+  <section id="view-account" class="view" hidden>
+    <div class="section-head"><h2 id="accountTitle">ကျွန်ုပ်၏ အကောင့်</h2></div>
+    <div id="accountBody"></div>
+  </section>
+
   <!-- CHECKOUT VIEW -->
   <section id="view-checkout" class="view" hidden>
     <div class="section-head"><h2 id="checkoutTitle">ငွေချေမည်</h2></div>
@@ -115,6 +121,7 @@
 <nav class="bottom-nav">
   <button class="nav-item active" data-view="home" type="button"><span class="nav-ico">⌂</span><span class="nav-label" data-i18n="nav_home">Home</span></button>
   <button class="nav-item" data-view="cart" type="button"><span class="nav-ico">🛒<span id="navCartCount" class="nav-badge" hidden>0</span></span><span class="nav-label" data-i18n="nav_cart">ခြင်းတောင်း</span></button>
+  <button class="nav-item" data-view="checkout" type="button"><span class="nav-ico">💳</span><span class="nav-label" data-i18n="nav_checkout">ငွေချေ</span></button>
   <button class="nav-item" data-view="wishlist" type="button"><span class="nav-ico">♥<span id="navWishCount" class="nav-badge" hidden>0</span></span><span class="nav-label" data-i18n="nav_wishlist">အကြိုက်ဆုံး</span></button>
   <button class="nav-item" data-view="orders" type="button"><span class="nav-ico">▤</span><span class="nav-label" data-i18n="nav_orders">အော်ဒါများ</span></button>
   <button class="nav-item" data-view="manage" id="navManage" type="button" hidden><span class="nav-ico">⚙</span><span class="nav-label" data-i18n="nav_manage">Manage</span></button>
@@ -133,6 +140,7 @@
       <input id="couponInput" type="text" placeholder="Coupon code">
       <button id="couponApplyBtn" class="btn btn-outline" type="button">Apply</button>
     </div>
+    <div class="center" style="margin-top:6px"><button id="couponListBtn" class="link-btn" type="button" data-i18n="view_coupons">Coupon များ ကြည့်မယ်</button></div>
     <div id="couponMsg" class="meta-line"></div>
     <div class="totals">
       <div class="total-row"><span id="lblSubtotal">Subtotal</span><span id="cartSubtotal">0 Ks</span></div>
@@ -192,8 +200,18 @@
   <div id="orderBody" class="order-body"></div>
 </div>
 
+<!-- COUPON LIST MODAL -->
+<div id="couponOverlay" class="overlay" hidden></div>
+<div id="couponModal" class="modal modal-sm" hidden role="dialog" aria-modal="true">
+  <div class="modal-head">
+    <h2 id="couponTitle">Coupon များ</h2>
+    <button id="couponClose" class="btn btn-ghost" type="button">✕</button>
+  </div>
+  <div id="couponBody" class="order-body"></div>
+</div>
+
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

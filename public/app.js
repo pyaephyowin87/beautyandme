@@ -12,6 +12,19 @@ const I18N = {
   my: {
     nav_home: 'Home', nav_shop: 'ဆိုင်', nav_orders: 'အော်ဒါများ', nav_manage: 'Manage',
     nav_cart: 'ခြင်းတောင်း', nav_wishlist: 'အကြိုက်ဆုံး',
+    nav_checkout: 'ငွေချေ',
+    checkout_empty: 'ခြင်းတောင်းထဲ ပစ္စည်း မရှိသေးပါ — အရင် ပစ္စည်း ရွေးပါ',
+    account_title: 'ကျွန်ုပ်၏ အကောင့်', my_orders: 'ကျွန်ုပ်၏ အော်ဒါများ',
+    change_password: 'Password ပြောင်းမယ်', current_password: 'လက်ရှိ Password',
+    new_password: 'Password အသစ်', confirm_password: 'Password အသစ် (ထပ်ရိုက်ပါ)',
+    password_changed: 'Password ပြောင်းပြီးပါပြီ', password_mismatch: 'Password အသစ်တွေ မတူပါ',
+    wrong_password: 'လက်ရှိ Password မမှန်ပါ',
+    forgot_password: 'Password မေ့သွားလား?',
+    forgot_help: 'ဆိုင်ကို Messenger (သို့) ဖုန်း 09765117366 နဲ့ ဆက်သွယ်ပါ — ဝန်ထမ်းက Password အသစ် ပြန်ပေးပါမယ်။',
+    view_coupons: 'Coupon များ ကြည့်မယ်', coupons_title: 'Coupon များ',
+    use_coupon: 'သုံးမယ်', no_coupons_active: 'Coupon မရှိသေးပါ',
+    percent_off: '% လျှော့', amount_off: 'Ks လျှော့',
+    password_too_short: 'Password အနည်းဆုံး ၄ လုံး ရှိရပါမယ်',
     wishlist_title: 'အကြိုက်ဆုံး ပစ္စည်းများ', wishlist_empty: 'အကြိုက်ဆုံး ပစ္စည်းထဲ ပစ္စည်း မရှိသေးပါ',
     wish_add: 'အကြိုက်ဆုံး ထဲ ထည့်မယ်', wish_remove: 'အကြိုက်ဆုံး ကနေ ဖယ်မယ်',
     wish_added: 'အကြိုက်ဆုံး ထဲ ထည့်ပြီးပါပြီ', wish_removed: 'အကြိုက်ဆုံး ကနေ ဖယ်ပြီးပါပြီ',
@@ -79,6 +92,19 @@ const I18N = {
   en: {
     nav_home: 'Home', nav_shop: 'Shop', nav_orders: 'Orders', nav_manage: 'Manage',
     nav_cart: 'Cart', nav_wishlist: 'Wishlist',
+    nav_checkout: 'Checkout',
+    checkout_empty: 'Your cart is empty — please add products first',
+    account_title: 'My Account', my_orders: 'My Orders',
+    change_password: 'Change password', current_password: 'Current password',
+    new_password: 'New password', confirm_password: 'Confirm new password',
+    password_changed: 'Password changed', password_mismatch: 'New passwords do not match',
+    wrong_password: 'Current password is incorrect',
+    forgot_password: 'Forgot your password?',
+    forgot_help: 'Contact the shop via Messenger or phone 09765117366 — staff will help you set a new password.',
+    view_coupons: 'View coupons', coupons_title: 'Coupons',
+    use_coupon: 'Use', no_coupons_active: 'No coupons available',
+    percent_off: '% off', amount_off: 'Ks off',
+    password_too_short: 'Password must be at least 4 characters',
     wishlist_title: 'My Wishlist', wishlist_empty: 'Your wishlist is empty',
     wish_add: 'Add to Wishlist', wish_remove: 'Remove from Wishlist',
     wish_added: 'Added to wishlist', wish_removed: 'Removed from wishlist',
@@ -167,6 +193,7 @@ const state = {
   detailOption: null,    // selected option label
   detailQty: 1,
   co: { delivery: 'yangon_inner', payment: 'cod', account: null, screenshot: null },
+  coForm: { name: '', phone: '', address: '' },
   manageTab: 'dashboard',
   manageLoaded: {},
 };
@@ -266,6 +293,8 @@ function applyI18n() {
   $('#newTitle').textContent = t('new');
   $('#allTitle').textContent = t('all');
   $('#ordersTitle').textContent = t('orders_title');
+  $('#accountTitle').textContent = t('account_title');
+  $('#couponTitle').textContent = t('coupons_title');
   $('#wishlistTitle').textContent = t('wishlist_title');
   $('#checkoutTitle').textContent = t('checkout_title');
   $('#manageTitle').textContent = t('nav_manage');
@@ -286,7 +315,7 @@ function applyI18n() {
 
 /* ---------------- views / nav ---------------- */
 function showView(name) {
-  ['home', 'orders', 'checkout', 'manage', 'wishlist'].forEach((v) => {
+  ['home', 'orders', 'checkout', 'manage', 'wishlist', 'account'].forEach((v) => {
     const el = $('#view-' + v);
     if (el) el.hidden = v !== name;
   });
@@ -294,6 +323,7 @@ function showView(name) {
   if (name === 'orders') loadOrders();
   if (name === 'manage') loadManage(state.manageTab);
   if (name === 'wishlist') loadWishlist();
+  if (name === 'account') renderAccount();
   window.scrollTo({ top: 0 });
 }
 
@@ -728,6 +758,32 @@ async function applyCoupon() {
   }
 }
 
+/* ---------------- coupons (customer picker) ---------------- */
+async function openCouponList() {
+  openOverlay('#couponOverlay', '#couponModal');
+  const body = $('#couponBody');
+  body.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  try {
+    const list = await api('/coupons');
+    if (!list.length) { body.innerHTML = '<div class="empty">' + esc(t('no_coupons_active')) + '</div>'; return; }
+    body.innerHTML = list.map((c) => {
+      const val = c.type === 'fixed'
+        ? fmt(c.value).replace(' Ks', '') + ' ' + t('amount_off')
+        : c.value + t('percent_off');
+      return '<div class="pay-account"><div class="pa-info"><div class="pa-method">' + esc(c.code) + '</div>' +
+        '<div class="pa-name">' + esc(val) + '</div></div>' +
+        '<button type="button" class="copy-btn" data-use="' + esc(c.code) + '">' + esc(t('use_coupon')) + '</button></div>';
+    }).join('');
+    $$('[data-use]', body).forEach((b) => b.addEventListener('click', () => {
+      $('#couponInput').value = b.dataset.use;
+      closeOverlay('#couponOverlay', '#couponModal');
+      applyCoupon();
+    }));
+  } catch (e) {
+    body.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
+
 /* ---------------- checkout ---------------- */
 const DELIVERY = {
   yangon_inner: { fee: 4000, noteKey: 'fee_inner' },
@@ -740,17 +796,25 @@ function lastCustomer() {
 }
 async function openCheckout() {
   closeCart();
-  state.co = { delivery: 'yangon_inner', payment: 'cod', account: null, screenshot: null };
-  const last = lastCustomer();
-  const name = (state.user && state.user.name) || (last && last.name) || '';
-  const phone = (state.user && state.user.phone) || (last && last.phone) || '';
-  const address = (last && last.address) || '';
   showView('checkout');
   const body = $('#checkoutBody');
+  // Empty cart: nothing to check out — show a hint instead of the form.
+  if (!state.cart.length) {
+    body.innerHTML = '<div class="checkout-card"><div class="empty">' + esc(t('checkout_empty')) + '</div>' +
+      '<div class="center"><button class="btn btn-primary" type="button" id="coEmptyShopBtn">' + esc(t('continue_shopping')) + '</button></div></div>';
+    $('#coEmptyShopBtn').addEventListener('click', () => showView('home'));
+    return;
+  }
   body.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
   if (!state.payments) {
     try { state.payments = await api('/payments'); } catch (e) { state.payments = []; }
   }
+  // Restore what the customer already filled — the form survives leaving
+  // the checkout page and coming back (Home, Cart, anywhere).
+  const last = lastCustomer();
+  const name = state.coForm.name || (state.user && state.user.name) || (last && last.name) || '';
+  const phone = state.coForm.phone || (state.user && state.user.phone) || (last && last.phone) || '';
+  const address = state.coForm.address || (last && last.address) || '';
   body.innerHTML =
     '<div class="checkout-card"><h3>' + esc(t('customer_info')) + '</h3>' +
     '<div class="field"><label>' + esc(t('name')) + '</label><input id="coName" type="text" value="' + esc(name) + '"></div>' +
@@ -760,17 +824,17 @@ async function openCheckout() {
 
     '<div class="checkout-card"><h3>' + esc(t('delivery')) + '</h3>' +
     Object.keys(DELIVERY).map((k) =>
-      '<label class="radio-line"><input type="radio" name="delivery" value="' + k + '"' + (k === 'yangon_inner' ? ' checked' : '') + '>' +
+      '<label class="radio-line"><input type="radio" name="delivery" value="' + k + '"' + (k === state.co.delivery ? ' checked' : '') + '>' +
       '<span><span class="rl-title">' + esc(t('delivery_' + (k === 'yangon_inner' ? 'inner' : k === 'yangon_outer' ? 'outer' : k === 'outside_yangon' ? 'outside' : 'pickup'))) + '</span><br>' +
       '<span class="rl-note">' + esc(t(DELIVERY[k].noteKey)) + '</span></span></label>').join('') +
     '</div>' +
 
     '<div class="checkout-card"><h3>' + esc(t('payment')) + '</h3>' +
-    '<label class="radio-line"><input type="radio" name="payment" value="cod" checked><span><span class="rl-title">' + esc(t('cod')) + '</span></span></label>' +
-    '<label class="radio-line"><input type="radio" name="payment" value="transfer"><span><span class="rl-title">' + esc(t('transfer')) + '</span></span></label>' +
-    '<div id="transferBox" hidden>' +
+    '<label class="radio-line"><input type="radio" name="payment" value="cod"' + (state.co.payment === 'cod' ? ' checked' : '') + '><span><span class="rl-title">' + esc(t('cod')) + '</span></span></label>' +
+    '<label class="radio-line"><input type="radio" name="payment" value="transfer"' + (state.co.payment === 'transfer' ? ' checked' : '') + '><span><span class="rl-title">' + esc(t('transfer')) + '</span></span></label>' +
+    '<div id="transferBox"' + (state.co.payment === 'transfer' ? '' : ' hidden') + '>' +
     '<div class="field" style="margin-top:12px"><label>' + esc(t('choose_account')) + '</label><div id="payAccounts"></div></div>' +
-    '<div id="shotBox" hidden>' +
+    '<div id="shotBox"' + (state.co.account || state.co.screenshot ? '' : ' hidden') + '>' +
     '<div class="field"><label>' + esc(t('screenshot')) + '</label><input id="shotInput" type="file" accept="image/*"></div>' +
     '<div id="shotPreview" class="shot-preview"></div>' +
     '</div></div></div>' +
@@ -779,13 +843,14 @@ async function openCheckout() {
     '<div class="order-summary-line"><span>' + esc(t('subtotal')) + '</span><span>' + fmt(cartSubtotal()) + '</span></div>' +
     (couponDiscount() > 0 ? '<div class="order-summary-line"><span>' + esc(t('discount')) + ' (' + esc(state.coupon.code) + ')</span><span>−' + fmt(couponDiscount()) + '</span></div>' : '') +
     '<div class="order-summary-line grand"><span>' + esc(t('total')) + '</span><span>' + fmt(cartTotal()) + '</span></div>' +
-    '<div class="delivery-line" id="coDeliveryLine">' + esc(t('fee_inner')) + '</div>' +
+    '<div class="delivery-line" id="coDeliveryLine">' + esc(t(DELIVERY[state.co.delivery].noteKey)) + '</div>' +
     '</div>' +
 
     '<div id="coError" class="error-text" hidden></div>' +
     '<div id="coHint" class="hint" hidden></div>' +
     '<button id="placeOrderBtn" class="btn btn-primary btn-block" type="button">' + esc(t('place_order')) + '</button>';
   renderPayAccounts();
+  if (state.co.screenshot) $('#shotPreview').innerHTML = '<img src="' + esc(state.co.screenshot) + '" alt="screenshot">';
   wireCheckout();
   updatePlaceButton();
 }
@@ -811,6 +876,11 @@ function renderPayAccounts() {
       updatePlaceButton();
     });
   });
+  // Restore the previously chosen account (survives leaving checkout).
+  if (state.co && state.co.account) {
+    const idx = list.findIndex((a) => a.method === state.co.account.method && String(a.account_number) === String(state.co.account.account_number));
+    if (idx >= 0) $$('.pay-account', box)[idx].classList.add('sel');
+  }
   $$('[data-copy]', box).forEach((b) => {
     b.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -822,6 +892,19 @@ function renderPayAccounts() {
   });
 }
 function wireCheckout() {
+  // Keep what the customer types — the form is rebuilt from state.coForm
+  // whenever they return to checkout, so nothing they typed is lost.
+  const saveForm = () => {
+    state.coForm = {
+      name: ($('#coName') ? $('#coName').value : '') || '',
+      phone: ($('#coPhone') ? $('#coPhone').value : '') || '',
+      address: ($('#coAddress') ? $('#coAddress').value : '') || '',
+    };
+  };
+  ['coName', 'coPhone', 'coAddress'].forEach((id) => {
+    const el = $('#' + id);
+    if (el) el.addEventListener('input', saveForm);
+  });
   $$('input[name="delivery"]').forEach((r) => {
     r.addEventListener('change', () => {
       state.co.delivery = r.value;
@@ -892,13 +975,19 @@ async function placeOrder() {
     const res = await api('/orders', { method: 'POST', body: JSON.stringify(payload) });
     const order = res.order || res;
     localStorage.setItem('bm_last_order', JSON.stringify({ name: name, phone: phone, address: address }));
+    const payMethod = state.co.payment;
+    const delMethod = state.co.delivery;
     state.cart = []; state.coupon = null;
+    // Fresh checkout next time — the saved form is cleared only after a
+    // successful order, never when the customer just navigates away.
+    state.co = { delivery: 'yangon_inner', payment: 'cod', account: null, screenshot: null };
+    state.coForm = { name: '', phone: '', address: '' };
     saveCart(); saveCoupon(); updateCartBadge(); renderCart();
     const feeLine = order.delivery_note
       ? order.delivery_note
       : (order.delivery_fee != null && order.delivery_fee > 0
         ? t('delivery_fee') + ' ' + fmt(order.delivery_fee) + ' — ' + t('pay_on_delivery')
-        : t(DELIVERY[state.co.delivery].noteKey));
+        : t(DELIVERY[delMethod].noteKey));
     $('#checkoutBody').innerHTML =
       '<div class="checkout-card success-box">' +
       '<div class="big">✓</div>' +
@@ -906,7 +995,7 @@ async function placeOrder() {
       '<p>' + esc(t('order_id')) + ': <strong>' + esc(order.id) + '</strong></p>' +
       '<p>' + esc(t('total')) + ': <strong>' + fmt(order.total != null ? order.total : cartTotal()) + '</strong></p>' +
       '<p class="delivery-line">' + esc(feeLine) + '</p>' +
-      (state.co.payment === 'transfer' ? '<p>' + esc(t('transfer_note')) + '</p>' : '') +
+      (payMethod === 'transfer' ? '<p>' + esc(t('transfer_note')) + '</p>' : '') +
       '<div style="margin-top:16px"><button class="btn btn-primary btn-block" type="button" id="backHomeBtn">' + esc(t('continue_shopping')) + '</button></div>' +
       '</div>';
     $('#backHomeBtn').addEventListener('click', () => { showView('home'); loadHomeGrid(true); });
@@ -984,7 +1073,7 @@ function logout() {
 function refreshAuthUI() {
   const btn = $('#authBtn');
   if (state.user) {
-    btn.textContent = state.user.name + ' • ' + t('logout');
+    btn.textContent = state.user.name;
   } else {
     btn.textContent = t('login');
   }
@@ -1003,6 +1092,62 @@ async function restoreSession() {
     localStorage.removeItem('bm_token');
   }
   refreshAuthUI();
+}
+
+/* ---------------- account ---------------- */
+function renderAccount() {
+  const body = $('#accountBody');
+  if (!state.user) {
+    body.innerHTML = '<div class="empty">' + esc(t('login_needed')) + '</div>' +
+      '<div class="center"><button class="btn btn-primary" type="button" id="accountLoginBtn">' + esc(t('login')) + '</button></div>';
+    $('#accountLoginBtn').addEventListener('click', openAuth);
+    return;
+  }
+  const u = state.user;
+  body.innerHTML =
+    '<div class="checkout-card">' +
+    '<div class="line"><span>' + esc(t('name')) + '</span><strong>' + esc(u.name || '') + '</strong></div>' +
+    '<div class="line"><span>' + esc(t('phone')) + '</span><span>' + esc(u.phone || '') + '</span></div>' +
+    '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">' +
+    '<button class="btn btn-outline" type="button" id="accountOrdersBtn">' + esc(t('my_orders')) + '</button>' +
+    '<button class="btn btn-outline" type="button" id="accountLogoutBtn">' + esc(t('logout')) + '</button>' +
+    '</div></div>' +
+    '<div class="checkout-card"><h3>' + esc(t('change_password')) + '</h3>' +
+    '<div class="field"><label>' + esc(t('current_password')) + '</label><input id="pwCurrent" type="password"></div>' +
+    '<div class="field"><label>' + esc(t('new_password')) + '</label><input id="pwNew" type="password"></div>' +
+    '<div class="field"><label>' + esc(t('confirm_password')) + '</label><input id="pwConfirm" type="password"></div>' +
+    '<div id="pwMsg" class="error-text" hidden></div>' +
+    '<button class="btn btn-primary" type="button" id="pwChangeBtn">' + esc(t('change_password')) + '</button>' +
+    '</div>' +
+    '<div class="checkout-card"><h3>' + esc(t('forgot_password')) + '</h3>' +
+    '<p class="hint">' + esc(t('forgot_help')) + '</p>' +
+    '<div style="margin-top:10px"><a class="btn btn-outline" href="https://m.me/beautyandme117" target="_blank" rel="noopener">Messenger</a></div>' +
+    '</div>';
+  $('#accountOrdersBtn').addEventListener('click', () => showView('orders'));
+  $('#accountLogoutBtn').addEventListener('click', () => { if (window.confirm(t('logout') + '?')) logout(); });
+  $('#pwChangeBtn').addEventListener('click', changePassword);
+}
+async function changePassword() {
+  const msg = $('#pwMsg');
+  msg.hidden = true;
+  const cur = $('#pwCurrent').value;
+  const nw = $('#pwNew').value;
+  const cf = $('#pwConfirm').value;
+  if (!cur || !nw || !cf) { msg.textContent = t('fill_all'); msg.hidden = false; return; }
+  if (nw !== cf) { msg.textContent = t('password_mismatch'); msg.hidden = false; return; }
+  if (nw.length < 4) { msg.textContent = t('password_too_short'); msg.hidden = false; return; }
+  const btn = $('#pwChangeBtn');
+  btn.disabled = true;
+  try {
+    await api('/auth/change-password', { method: 'POST', body: JSON.stringify({ current_password: cur, new_password: nw }) });
+    $('#pwCurrent').value = ''; $('#pwNew').value = ''; $('#pwConfirm').value = '';
+    msg.hidden = false; msg.style.color = 'var(--green)'; msg.textContent = t('password_changed');
+    toast(t('password_changed'));
+  } catch (e) {
+    msg.style.color = '';
+    msg.textContent = (e.status === 401) ? t('wrong_password') : t('error_load');
+    msg.hidden = false;
+  } finally { btn.disabled = false; }
 }
 
 /* ---------------- orders ---------------- */
@@ -1375,7 +1520,7 @@ function wire() {
   $('#cartClose').addEventListener('click', closeCart);
   $('#cartOverlay').addEventListener('click', (ev) => { if (ev.target === $('#cartOverlay')) closeCart(); });
   $('#authBtn').addEventListener('click', () => {
-    if (state.user) { if (window.confirm(t('logout') + '?')) logout(); }
+    if (state.user) showView('account');
     else openAuth();
   });
   $('#authClose').addEventListener('click', closeAuth);
@@ -1390,11 +1535,15 @@ function wire() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopLayer(); });
   $('#couponApplyBtn').addEventListener('click', applyCoupon);
   $('#couponInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyCoupon(); });
+  $('#couponListBtn').addEventListener('click', openCouponList);
+  $('#couponClose').addEventListener('click', () => closeOverlay('#couponOverlay', '#couponModal'));
+  $('#couponOverlay').addEventListener('click', (ev) => { if (ev.target === $('#couponOverlay')) closeOverlay('#couponOverlay', '#couponModal'); });
   $('#checkoutBtn').addEventListener('click', () => { if (state.cart.length) openCheckout(); });
   $('#playStoreBtn').addEventListener('click', () => onAppButton('play_store_url'));
   $('#appStoreBtn').addEventListener('click', () => onAppButton('app_store_url'));
   $$('.nav-item').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.view === 'cart') { openCart(); return; }
+    if (b.dataset.view === 'checkout') { openCheckout(); return; }
     showView(b.dataset.view);
   }));
   $$('#manageTabs .tab').forEach((b) => b.addEventListener('click', () => loadManage(b.dataset.mtab)));
