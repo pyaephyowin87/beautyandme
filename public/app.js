@@ -97,6 +97,7 @@ const I18N = {
     activity: 'လုပ်ဆောင်ချက် မှတ်တမ်း', search_activity: 'ရှာမယ် (လူ / order / ပစ္စည်း)…', all_actions: 'လုပ်ဆောင်ချက် အားလုံး', no_activity: 'မှတ်တမ်း မရှိသေးပါ',
     action_order_status: 'Order status ပြောင်းတယ်', action_password_reset: 'Password ချိန်းပေးတယ်', action_manager_add: 'Manager ထည့်တယ်', action_manager_remove: 'Manager ဖြုတ်တယ်', action_product_update: 'ပစ္စည်း ပြင်တယ်', action_product_photo_add: 'ပစ္စည်း ပုံ ထည့်တယ်', action_product_photo_remove: 'ပစ္စည်း ပုံ ဖျက်တယ်', action_coupon_create: 'Coupon လုပ်တယ်', action_coupon_delete: 'Coupon ဖျက်တယ်', action_payments_update: 'Payment အကောင့် ပြင်တယ်', action_app_links_update: 'App link ပြင်တယ်', action_woocommerce_settings: 'WooCommerce setting ပြင်တယ်', action_woocommerce_import: 'WooCommerce ပုံ တင်တယ်', action_order_edit: 'Order ပစ္စည်း ပြင်တယ်',
     edit_items: 'ပစ္စည်း ပြင်မယ်', save_changes: 'သိမ်းမယ်', cancel: 'မလုပ်တော့ဘူး', no_items: 'ပစ္စည်း မရှိသေးပါ', order_locked: 'ပို့ပြီးသား / ပယ်ဖျက်ထားတဲ့ order ကို ပြင်လို့မရပါ', total_changed: 'Total ပြောင်းသွားတယ်', total_diff_hint: 'customer လွှဲထားတဲ့ ငွေ ကွာရင် Messenger နဲ့ ပြောပေးပါ',
+    coupon: 'Coupon', apply: 'သုံးမယ်', remove_coupon: 'Coupon ဖြုတ်မယ်', coupon_invalid: 'Coupon မမှန်ပါ', action_order_coupon: 'Order coupon ပြင်တယ်',
     manager_hint: 'ဝန်ထမ်းက ဆိုင်မှာ အရင် register လုပ်ထားရမယ် (နာမည် + ဖုန်း) — ပြီးမှ ဒီမှာ ဖုန်းနံပါတ် ရိုက်ပြီး Add လုပ်ပါ',
     add_photo: 'ပုံထည့်မယ်', change_photo: 'ပုံပြောင်းမယ်', remove_photo: 'ပုံဖျက်မယ်',
     coupon_scope: 'Coupon သက်ရောက်မယ့် အရာ (မရွေးရင် ပစ္စည်းအားလုံးအတွက်)',
@@ -200,6 +201,7 @@ const I18N = {
     activity: 'Activity log', search_activity: 'Search (person / order / product)…', all_actions: 'All actions', no_activity: 'No activity yet',
     action_order_status: 'Changed order status', action_password_reset: 'Reset a password', action_manager_add: 'Added a manager', action_manager_remove: 'Removed a manager', action_product_update: 'Edited a product', action_product_photo_add: 'Added a product photo', action_product_photo_remove: 'Removed a product photo', action_coupon_create: 'Created a coupon', action_coupon_delete: 'Deleted a coupon', action_payments_update: 'Edited payment accounts', action_app_links_update: 'Edited app links', action_woocommerce_settings: 'Edited WooCommerce settings', action_woocommerce_import: 'Imported WooCommerce photos', action_order_edit: 'Edited order items',
     edit_items: 'Edit items', save_changes: 'Save changes', cancel: 'Cancel', no_items: 'No items yet', order_locked: 'A delivered or cancelled order cannot be edited', total_changed: 'Total changed', total_diff_hint: 'If the customer already transferred, tell them the difference by Messenger',
+    coupon: 'Coupon', apply: 'Apply', remove_coupon: 'Remove coupon', coupon_invalid: 'Invalid coupon', action_order_coupon: 'Edited order coupon',
     manager_hint: 'Staff must register in the shop first (name + phone) — then type their phone here and tap Add',
     add_photo: 'Add photo', change_photo: 'Change photo', remove_photo: 'Remove photo',
     coupon_scope: 'What this coupon applies to (leave empty = all products)',
@@ -1399,6 +1401,11 @@ async function openAdminOrder(id) {
         return '<div class="line"><span>' + esc(it.product_name || it.name || it.product_id) + (it.option_label ? ' (' + esc(it.option_label) + ')' : '') + ' × ' + (it.qty || 1) + '</span><span>' + fmt(lineTotal) + '</span></div>';
       }).join('') +
       (o.status !== 'delivered' && o.status !== 'cancelled' ? '<div style="margin-top:10px"><button type="button" class="btn btn-outline btn-block" id="adminEditItemsBtn">✏️ ' + esc(t('edit_items')) + '</button></div>' : '') +
+      (o.status !== 'delivered' && o.status !== 'cancelled' ? '<hr><div style="font-weight:700;margin-bottom:8px">' + esc(t('coupon')) + '</div>' +
+      '<div class="row-flex"><select id="adminCouponSel" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:140px"><option value="">—</option></select>' +
+      '<button type="button" class="btn btn-primary" id="adminCouponApply">' + esc(t('apply')) + '</button>' +
+      (o.coupon_code ? '<button type="button" class="btn btn-outline" id="adminCouponRemove">' + esc(t('remove_coupon')) + '</button>' : '') + '</div>' +
+      '<div id="adminCouponNote" style="margin-top:6px;font-size:13px;color:var(--muted)"></div>' : '') +
       '<hr>' +
       '<div class="line"><span>' + esc(t('subtotal')) + '</span><span>' + fmt(o.subtotal) + '</span></div>' +
       (o.discount ? '<div class="line"><span>' + esc(t('discount')) + '</span><span>−' + fmt(o.discount) + '</span></div>' : '') +
@@ -1413,6 +1420,50 @@ async function openAdminOrder(id) {
     if (o.has_screenshot) loadAdminScreenshot(o.id);
     const editBtn = $('#adminEditItemsBtn');
     if (editBtn) editBtn.addEventListener('click', () => renderAdminOrderEdit(o));
+    // Coupon apply / remove (admin only, same lock as item editing).
+    const couponSel = $('#adminCouponSel');
+    if (couponSel) {
+      const fillCoupons = async () => {
+        try {
+          const data = await api('/manage/coupons');
+          const list = data.coupons || data.items || (Array.isArray(data) ? data : []);
+          const active = list.filter((c) => c.active !== false);
+          couponSel.innerHTML = '<option value="">—</option>' + active.map((c) =>
+            '<option value="' + esc(c.code) + '"' + (o.coupon_code === c.code ? ' selected' : '') + '>' + esc(c.code) + ' — ' + esc(c.type) + ' ' + esc(String(c.value)) + (c.type === 'percent' ? '%' : ' Ks') + '</option>').join('');
+        } catch (e) { /* select stays empty */ }
+      };
+      fillCoupons();
+      const showCouponResult = async (res) => {
+        const diff = res.new_total - res.old_total;
+        loadMgOrders(true);
+        await openAdminOrder(o.id);
+        const nb = $('#orderBody');
+        if (nb && diff !== 0) {
+          const diffText = (diff > 0 ? '+' : '') + fmt(diff) + ' Ks';
+          const warn = (o.payment && o.payment.method === 'transfer') ? ' — ' + esc(t('total_diff_hint')) : '';
+          nb.insertAdjacentHTML('afterbegin', '<div class="mg-card" style="background:#FDE7F0;margin-bottom:10px"><strong>' + esc(t('total_changed')) + ':</strong> ' + fmt(res.old_total) + ' → ' + fmt(res.new_total) + ' Ks (' + diffText + ')' + warn + '</div>');
+        }
+        toast(t('saved'));
+      };
+      const couponNote = () => $('#adminCouponNote');
+      $('#adminCouponApply').addEventListener('click', async () => {
+        const code = couponSel.value;
+        if (!code) { if (couponNote()) couponNote().textContent = t('coupon_invalid'); return; }
+        try {
+          const res = await api('/manage/orders/' + encodeURIComponent(o.id) + '/coupon', { method: 'PATCH', body: JSON.stringify({ coupon_code: code }) });
+          await showCouponResult(res);
+        } catch (e) {
+          if (couponNote()) couponNote().textContent = t(e && e.message === 'no_eligible_items' ? 'coupon_no_eligible_items' : e && e.message === 'order_locked' ? 'order_locked' : 'coupon_invalid');
+        }
+      });
+      const remBtn = $('#adminCouponRemove');
+      if (remBtn) remBtn.addEventListener('click', async () => {
+        try {
+          const res = await api('/manage/orders/' + encodeURIComponent(o.id) + '/coupon', { method: 'PATCH', body: JSON.stringify({ coupon_code: null }) });
+          await showCouponResult(res);
+        } catch (e) { if (couponNote()) couponNote().textContent = t(e && e.message === 'order_locked' ? 'order_locked' : 'error_load'); }
+      });
+    }
     $$('[data-mgstatus]').forEach((btn) => btn.addEventListener('click', async () => {
       try {
         const res = await api('/manage/orders/' + encodeURIComponent(o.id), { method: 'PATCH', body: JSON.stringify({ status: btn.dataset.mgstatus }) });
@@ -1659,7 +1710,7 @@ async function loadMgUsers(reset) {
 }
 
 /* ---------------- manage: activity log (owner only) ---------------- */
-const ACTIVITY_ACTIONS = ['order_status', 'order_edit', 'password_reset', 'manager_add', 'manager_remove', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
+const ACTIVITY_ACTIONS = ['order_status', 'order_edit', 'order_coupon', 'password_reset', 'manager_add', 'manager_remove', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
 function activityLabel(a) { return t('action_' + a); }
 let mgActivity = { q: '', action: '', offset: 0, items: [] };
 async function renderManageActivity(body) {
