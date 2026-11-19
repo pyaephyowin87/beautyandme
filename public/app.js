@@ -72,6 +72,10 @@ const I18N = {
     add_product: 'ပစ္စည်း အသစ် ထည့်မယ်', product_name: 'ပစ္စည်း နာမည်', new_brand: 'Brand အသစ်…', category: 'Category',
     add_option: 'Option ထည့်မယ်', option_label: 'Size / Shade', product_added: 'ပစ္စည်း အသစ် ထည့်ပြီးပြီ',
     duplicate_product: 'ဒီ နာမည်နဲ့ ပစ္စည်း ရှိပြီးသားပါ', action_product_create: 'ပစ္စည်း အသစ် ထည့်တယ်',
+    sale_staff: 'Sale Staff', make_staff: 'Sale Staff လုပ်မယ်', remove_staff: 'Sale Staff ဖြုတ်မယ်', staff_title: 'Sale Staff',
+    staff_hint: 'Sale Staff က order ပဲ ကြည့်ရ/ပြင်ရ တယ် — Catalog, Coupon, Users တွေ မမြင်ရပါ',
+    action_staff_add: 'Sale Staff ထည့်တယ်', action_staff_remove: 'Sale Staff ဖြုတ်တယ်', action_order_create: 'Order တင်တယ်',
+    view_history: 'History ကြည့်မယ်',
     is_new: 'အသစ်', sale_featured: 'Sale ★', best_seller: 'အရောင်းရဆုံး', brand: 'Brand',
     manage_no_access: 'Manage ကို Manager အကောင့်နဲ့သာ သုံးနိုင်ပါတယ်။',
     wc_warn: 'key ကို chat မှာ ဘယ်တော့မှ မပို့ပါနဲ့',
@@ -99,7 +103,7 @@ const I18N = {
     user_not_found: 'ဒီဖုန်းနဲ့ အကောင့် မရှိသေးပါ — အရင် register လုပ်ခိုင်းပါ',
     owner_only: 'Owner (095117366) ပဲ လုပ်နိုင်ပါတယ်', no_users: 'User မရှိသေးပါ',
     pw_reset_hint: 'ချိန်းပြီးရင် customer ကို Messenger / ဖုန်း နဲ့ password အသစ်ကို ပြောပေးပါ — customer က အသစ်နဲ့ ပြန်ဝင်ရမယ်',
-    activity: 'လုပ်ဆောင်ချက် မှတ်တမ်း', search_activity: 'ရှာမယ် (လူ / order / ပစ္စည်း)…', all_actions: 'လုပ်ဆောင်ချက် အားလုံး', no_activity: 'မှတ်တမ်း မရှိသေးပါ',
+    activity: 'လုပ်ဆောင်ချက် မှတ်တမ်း', search_activity: 'ရှာမယ် (voucher နံပါတ် / လူ / ပစ္စည်း)…', all_actions: 'လုပ်ဆောင်ချက် အားလုံး', no_activity: 'မှတ်တမ်း မရှိသေးပါ',
     action_order_status: 'Order status ပြောင်းတယ်', action_password_reset: 'Password ချိန်းပေးတယ်', action_manager_add: 'Manager ထည့်တယ်', action_manager_remove: 'Manager ဖြုတ်တယ်', action_product_update: 'ပစ္စည်း ပြင်တယ်', action_product_photo_add: 'ပစ္စည်း ပုံ ထည့်တယ်', action_product_photo_remove: 'ပစ္စည်း ပုံ ဖျက်တယ်', action_coupon_create: 'Coupon လုပ်တယ်', action_coupon_delete: 'Coupon ဖျက်တယ်', action_payments_update: 'Payment အကောင့် ပြင်တယ်', action_app_links_update: 'App link ပြင်တယ်', action_woocommerce_settings: 'WooCommerce setting ပြင်တယ်', action_woocommerce_import: 'WooCommerce ပုံ တင်တယ်', action_order_edit: 'Order ပစ္စည်း ပြင်တယ်',
     edit_items: 'ပစ္စည်း ပြင်မယ်', save_changes: 'သိမ်းမယ်', cancel: 'မလုပ်တော့ဘူး', no_items: 'ပစ္စည်း မရှိသေးပါ', order_locked: 'ပို့ပြီးသား / ပယ်ဖျက်ထားတဲ့ order ကို ပြင်လို့မရပါ', total_changed: 'Total ပြောင်းသွားတယ်', total_diff_hint: 'customer လွှဲထားတဲ့ ငွေ ကွာရင် Messenger နဲ့ ပြောပေးပါ',
     coupon: 'Coupon', apply: 'သုံးမယ်', remove_coupon: 'Coupon ဖြုတ်မယ်', coupon_invalid: 'Coupon မမှန်ပါ', action_order_coupon: 'Order coupon ပြင်တယ်',
@@ -181,6 +185,10 @@ const I18N = {
     add_product: 'Add Product', product_name: 'Product name', new_brand: 'New brand…', category: 'Category',
     add_option: 'Add option', option_label: 'Size / Shade', product_added: 'Product added',
     duplicate_product: 'A product with this name already exists', action_product_create: 'Added a product',
+    sale_staff: 'Sale Staff', make_staff: 'Make sale staff', remove_staff: 'Remove sale staff', staff_title: 'Sale Staff',
+    staff_hint: 'Sale staff can only view and edit orders — no Catalog, Coupons or Users',
+    action_staff_add: 'Added sale staff', action_staff_remove: 'Removed sale staff', action_order_create: 'Placed an order',
+    view_history: 'View history',
     is_new: 'New', sale_featured: 'Sale ★', best_seller: 'Best seller', brand: 'Brand',
     manage_no_access: 'Manage is only available to the manager account.',
     wc_warn: 'Never send your key in chat',
@@ -208,7 +216,7 @@ const I18N = {
     user_not_found: 'No account with this phone — ask them to register first',
     owner_only: 'Only the owner (095117366) can do this', no_users: 'No users yet',
     pw_reset_hint: 'After changing, tell the customer the new password by Messenger / phone — they will sign in again with it',
-    activity: 'Activity log', search_activity: 'Search (person / order / product)…', all_actions: 'All actions', no_activity: 'No activity yet',
+    activity: 'Activity log', search_activity: 'Search (voucher no. / person / product)…', all_actions: 'All actions', no_activity: 'No activity yet',
     action_order_status: 'Changed order status', action_password_reset: 'Reset a password', action_manager_add: 'Added a manager', action_manager_remove: 'Removed a manager', action_product_update: 'Edited a product', action_product_photo_add: 'Added a product photo', action_product_photo_remove: 'Removed a product photo', action_coupon_create: 'Created a coupon', action_coupon_delete: 'Deleted a coupon', action_payments_update: 'Edited payment accounts', action_app_links_update: 'Edited app links', action_woocommerce_settings: 'Edited WooCommerce settings', action_woocommerce_import: 'Imported WooCommerce photos', action_order_edit: 'Edited order items',
     edit_items: 'Edit items', save_changes: 'Save changes', cancel: 'Cancel', no_items: 'No items yet', order_locked: 'A delivered or cancelled order cannot be edited', total_changed: 'Total changed', total_diff_hint: 'If the customer already transferred, tell them the difference by Messenger',
     coupon: 'Coupon', apply: 'Apply', remove_coupon: 'Remove coupon', coupon_invalid: 'Invalid coupon', action_order_coupon: 'Edited order coupon',
@@ -1207,7 +1215,7 @@ function refreshAuthUI() {
   } else {
     btn.textContent = t('login');
   }
-  const isMgr = !!(state.user && state.user.is_manager);
+  const isMgr = !!(state.user && (state.user.is_manager || state.user.is_sale_staff));
   $('#navManage').hidden = !isMgr;
   if (!isMgr && !$('#view-manage').hidden) showView('home');
 }
@@ -1348,14 +1356,22 @@ async function openOrderDetail(id) {
 const OWNER_TABS = ['payments', 'applink', 'woocommerce', 'activity'];
 function loadManage(tab) {
   const isOwner = state.user && (state.user.is_owner || state.user.phone === '095117366');
+  const isManager = !!(state.user && state.user.is_manager);
+  const isStaff = !!(state.user && state.user.is_sale_staff);
   $$('#manageTabs .tab').forEach((b) => {
-    b.style.display = (!isOwner && OWNER_TABS.indexOf(b.dataset.mtab) !== -1) ? 'none' : '';
+    const mtab = b.dataset.mtab;
+    let show = true;
+    if (!isOwner && OWNER_TABS.indexOf(mtab) !== -1) show = false;
+    // Sale staff see ONLY the Orders tab — nothing else in Manage.
+    if (isStaff && !isManager && mtab !== 'orders') show = false;
+    b.style.display = show ? '' : 'none';
   });
   if (!isOwner && OWNER_TABS.indexOf(tab) !== -1) tab = 'dashboard';
+  if (isStaff && !isManager && tab !== 'orders') tab = 'orders';
   state.manageTab = tab;
   $$('#manageTabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.mtab === tab));
   const body = $('#manageBody');
-  if (!state.user || !state.user.is_manager) {
+  if (!state.user || (!state.user.is_manager && !state.user.is_sale_staff)) {
     body.innerHTML = '<div class="error-box">' + esc(t('manage_no_access')) + '</div>';
     return;
   }
@@ -1430,9 +1446,11 @@ async function openAdminOrder(id) {
     const items = o.items || [];
     const c = o.customer || {};
     const pay = o.payment || {};
+    const isOwner = state.user && (state.user.is_owner || state.user.phone === '095117366');
     $('#orderBody').innerHTML =
       '<div class="line"><span>' + esc(t('order_id')) + '</span><strong>' + esc(o.id) + '</strong></div>' +
       '<div class="line"><span>' + esc(t('status')) + '</span><span class="status-pill" id="adminOrderPill">' + esc(statusLabel(o.status)) + '</span></div>' +
+      (isOwner ? '<div style="margin-top:10px"><button type="button" class="btn btn-outline btn-block" id="adminHistoryBtn">' + esc(t('view_history')) + '</button></div>' : '') +
       '<div class="line"><span>' + esc(t('date')) + '</span><span>' + esc(fmtDate(o.created_at)) + '</span></div>' +
       ((c.name || c.phone || c.address) ?
         '<hr>' +
@@ -1464,6 +1482,14 @@ async function openAdminOrder(id) {
       '<div class="row-flex" style="flex-wrap:wrap">' + ORDER_STATUSES.map((s) =>
         '<button type="button" class="btn ' + (o.status === s ? 'btn-primary' : 'btn-outline') + '" data-mgstatus="' + s + '">' + esc(statusLabel(s)) + '</button>').join('') + '</div>';
     if (o.has_screenshot) loadAdminScreenshot(o.id);
+    const historyBtn = $('#adminHistoryBtn');
+    if (historyBtn) historyBtn.addEventListener('click', () => {
+      // Jump to the Activity log with this voucher no. already searched —
+      // the log search matches the voucher no. against every entry.
+      closeOverlay('#orderOverlay', '#orderModal');
+      state.activityPrefill = o.id;
+      loadManage('activity');
+    });
     const editBtn = $('#adminEditItemsBtn');
     if (editBtn) editBtn.addEventListener('click', () => renderAdminOrderEdit(o));
     // Coupon apply / remove (admin only, same lock as item editing).
@@ -1641,6 +1667,10 @@ async function renderManageUsers(body) {
       '<div class="row-flex" style="margin-top:12px"><input id="mgAddManagerPhone" type="tel" placeholder="' + esc(t('add_manager_ph')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
       '<button class="btn btn-primary" type="button" id="mgAddManagerBtn">' + esc(t('add')) + '</button></div>' +
       '<div style="margin-top:6px;font-size:12px;color:var(--muted)">' + esc(t('manager_hint')) + '</div></div>' : '') +
+    (isOwner ? '<div class="mg-card"><h3>' + esc(t('staff_title')) + '</h3><div id="mgStaffWrap"><div class="loading">' + esc(t('loading')) + '</div></div>' +
+      '<div class="row-flex" style="margin-top:12px"><input id="mgAddStaffPhone" type="tel" placeholder="' + esc(t('add_manager_ph')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
+      '<button class="btn btn-primary" type="button" id="mgAddStaffBtn">' + esc(t('add')) + '</button></div>' +
+      '<div style="margin-top:6px;font-size:12px;color:var(--muted)">' + esc(t('staff_hint')) + '</div></div>' : '') +
     '<div class="mg-card"><div class="row-flex">' +
     '<input id="mgUserSearch" type="search" placeholder="' + esc(t('search_users')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
     '<button class="btn btn-primary" type="button" id="mgUserSearchBtn">' + esc(t('search_btn')) + '</button>' +
@@ -1657,6 +1687,7 @@ async function renderManageUsers(body) {
   $('#mgUserMoreBtn').addEventListener('click', () => loadMgUsers(false));
   if (isOwner) {
     loadMgManagers();
+    loadMgStaff();
     $('#mgAddManagerBtn').addEventListener('click', async () => {
       const phone = $('#mgAddManagerPhone').value.trim();
       if (!phone) return;
@@ -1670,8 +1701,43 @@ async function renderManageUsers(body) {
         toast(e.status === 404 ? t('user_not_found') : t('error_load'));
       }
     });
+    $('#mgAddStaffBtn').addEventListener('click', async () => {
+      const phone = $('#mgAddStaffPhone').value.trim();
+      if (!phone) return;
+      try {
+        await api('/manage/sale-staff', { method: 'POST', body: JSON.stringify({ phone }) });
+        $('#mgAddStaffPhone').value = '';
+        toast(t('saved'));
+        loadMgStaff();
+        loadMgUsers(true);
+      } catch (e) {
+        toast(e.status === 404 ? t('user_not_found') : t('error_load'));
+      }
+    });
   }
   loadMgUsers(true);
+}
+async function loadMgStaff() {
+  const wrap = $('#mgStaffWrap');
+  if (!wrap) return;
+  try {
+    const data = await api('/manage/sale-staff');
+    const list = data.staff || [];
+    wrap.innerHTML =
+      (list.length ? list.map((m) =>
+        '<div class="kv-row"><span><strong>' + esc(m.name || m.phone) + '</strong> — ' + esc(m.phone) + '</span><button type="button" class="btn btn-outline" data-mgdelstaff="' + esc(m.phone) + '">' + esc(t('remove_staff')) + '</button></div>').join('')
+        : '<div class="empty">' + esc(t('no_users')) + '</div>');
+    $$('[data-mgdelstaff]', wrap).forEach((b) => b.addEventListener('click', async () => {
+      try {
+        await api('/manage/sale-staff/' + encodeURIComponent(b.dataset.mgdelstaff), { method: 'DELETE' });
+        toast(t('deleted'));
+        loadMgStaff();
+        loadMgUsers(true);
+      } catch (e) { toast(t('error_load')); }
+    }));
+  } catch (e) {
+    wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
 }
 async function loadMgManagers() {
   const wrap = $('#mgManagersWrap');
@@ -1715,10 +1781,12 @@ async function loadMgUsers(reset) {
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">' +
       (u.is_owner ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('owner')) + '</span>' : '') +
       (u.is_manager && !u.is_owner ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('manager')) + '</span>' : '') +
+      (u.is_sale_staff && !u.is_owner && !u.is_manager ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('sale_staff')) + '</span>' : '') +
       '</div>' +
       '<div class="row-flex" style="margin-top:10px;flex-wrap:wrap">' +
       '<button type="button" class="btn btn-outline" data-mgpw="' + esc(u.phone) + '">' + esc(t('set_password')) + '</button>' +
       (isOwner && !u.is_owner ? '<button type="button" class="btn btn-outline" data-mgmgr="' + esc(u.phone) + '" data-ismgr="' + (u.is_manager ? '1' : '0') + '">' + esc(u.is_manager ? t('remove_manager') : t('make_manager')) + '</button>' : '') +
+      (isOwner && !u.is_owner && !u.is_manager ? '<button type="button" class="btn btn-outline" data-mgstaff="' + esc(u.phone) + '" data-isstaff="' + (u.is_sale_staff ? '1' : '0') + '">' + esc(u.is_sale_staff ? t('remove_staff') : t('make_staff')) + '</button>' : '') +
       '</div>' +
       '<div data-pwform="' + esc(u.phone) + '" hidden style="margin-top:10px"><div class="row-flex">' +
       '<input type="text" placeholder="' + esc(t('new_password')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:140px">' +
@@ -1750,13 +1818,22 @@ async function loadMgUsers(reset) {
         loadMgUsers(true);
       } catch (e) { toast(e.status === 404 ? t('user_not_found') : t('error_load')); }
     }));
+    $$('[data-mgstaff]', wrap).forEach((b) => b.addEventListener('click', async () => {
+      try {
+        if (b.dataset.isstaff === '1') await api('/manage/sale-staff/' + encodeURIComponent(b.dataset.mgstaff), { method: 'DELETE' });
+        else await api('/manage/sale-staff', { method: 'POST', body: JSON.stringify({ phone: b.dataset.mgstaff }) });
+        toast(t('saved'));
+        loadMgStaff();
+        loadMgUsers(true);
+      } catch (e) { toast(e.status === 404 ? t('user_not_found') : t('error_load')); }
+    }));
   } catch (e) {
     wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
   }
 }
 
 /* ---------------- manage: activity log (owner only) ---------------- */
-const ACTIVITY_ACTIONS = ['order_status', 'order_edit', 'order_coupon', 'password_reset', 'manager_add', 'manager_remove', 'product_create', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
+const ACTIVITY_ACTIONS = ['order_create', 'order_status', 'order_edit', 'order_coupon', 'password_reset', 'manager_add', 'manager_remove', 'staff_add', 'staff_remove', 'product_create', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
 function activityLabel(a) { return t('action_' + a); }
 let mgActivity = { q: '', action: '', offset: 0, items: [] };
 async function renderManageActivity(body) {
@@ -1771,6 +1848,12 @@ async function renderManageActivity(body) {
     '</div><div id="mgActWrap" style="margin-top:12px"></div>' +
     '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgActMoreBtn">' + esc(t('more')) + '</button></div></div>';
   mgActivity = { q: '', action: '', offset: 0, items: [] };
+  // Jumped here from an order's History button: search that voucher no.
+  if (state.activityPrefill) {
+    mgActivity.q = state.activityPrefill;
+    $('#mgActSearch').value = state.activityPrefill;
+    state.activityPrefill = null;
+  }
   const doSearch = () => {
     mgActivity.q = $('#mgActSearch').value.trim();
     mgActivity.action = $('#mgActFilter').value;
