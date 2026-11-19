@@ -221,6 +221,23 @@ function ownerMiddleware(req, res, next) {
   return next();
 }
 
+// Activity log (owner only) — who changed what, when. Logging never
+// breaks the action itself: any failure is swallowed and logged to console.
+async function logActivity(req, action, targetType, targetId, details) {
+  try {
+    await store.saveActivity({
+      id: `AL-${Date.now().toString(36)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      created_at: new Date().toISOString(),
+      user_phone: req.user ? req.user.phone : null,
+      user_name: req.user ? req.user.name : null,
+      action,
+      target_type: targetType || null,
+      target_id: targetId || null,
+      details: details || null,
+    });
+  } catch (e) { console.error('[activity] log failed', e && e.message); }
+}
+
 // Optional auth: attach req.user when a valid Bearer token is present.
 async function optionalAuth(req, _res, next) {
   const header = req.headers.authorization || '';
@@ -708,10 +725,22 @@ app.patch('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (re
     if (!order) return res.status(404).json({ error: 'order_not_found' });
     const { status } = req.body || {};
     if (!ORDER_STATUSES.includes(status)) return res.status(400).json({ error: 'invalid_status' });
+    const oldStatus = order.status;
     order.status = status;
     order.updated_at = new Date().toISOString();
     await store.saveOrder(order);
+    await logActivity(req, 'order_status', 'order', order.id, `status: ${oldStatus} → ${status}`);
     return res.json({ order: adminOrderShape(order) });
+  } catch (err) { return next(err); }
+});
+
+// Activity log — owner only. Newest first; ?q searches who/what, ?action filters by kind.
+app.get('/api/manage/activity', authMiddleware, ownerMiddleware, async (req, res, next) => {
+  try {
+    const { q = '', action = '' } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    return res.json(await store.listActivity(limit, offset, { q, action }));
   } catch (err) { return next(err); }
 });
 
@@ -795,6 +824,8 @@ app.patch('/api/manage/users/:phone/password', authMiddleware, managerMiddleware
     user.token = null;
     user.token_expires_at = null;
     await store.saveUser(user);
+    // Never log the password itself — only that it was reset, and for whom.
+    await logActivity(req, 'password_reset', 'user', phone, `password reset for ${user.name || phone}`);
     return res.json({ ok: true });
   } catch (err) { return next(err); }
 });
@@ -828,6 +859,7 @@ app.post('/api/manage/managers', authMiddleware, ownerMiddleware, async (req, re
       extra.push(phone);
       await store.setSetting('managers', extra);
     }
+    await logActivity(req, 'manager_add', 'user', phone, `manager added: ${user.name || phone}`);
     return res.status(201).json({ ok: true, phone });
   } catch (err) { return next(err); }
 });
@@ -837,6 +869,7 @@ app.delete('/api/manage/managers/:phone', authMiddleware, ownerMiddleware, async
     const phone = normalizePhone(req.params.phone);
     const extra = (await store.getSetting('managers')) || [];
     await store.setSetting('managers', (Array.isArray(extra) ? extra : []).filter((p) => p !== phone));
+    await logActivity(req, 'manager_remove', 'user', phone, `manager removed: ${phone}`);
     return res.json({ ok: true });
   } catch (err) { return next(err); }
 });
@@ -864,6 +897,11 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
     const { sale_price, is_new, best_seller, sale_featured, price, option_prices } = req.body || {};
+    const before = {
+      price: p.price, sale_price: p.sale_price,
+      best_seller: Boolean(p.best_seller), sale_featured: Boolean(p.sale_featured),
+      options: Array.isArray(p.options) ? p.options.map((o) => ({ label: o.label, price: o.price })) : [],
+    };
     if (sale_price !== undefined) {
       if (sale_price !== null && (typeof sale_price !== 'number' || sale_price < 0)) {
         return res.status(400).json({ error: 'invalid_sale_price' });
@@ -895,6 +933,18 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
     if (best_seller !== undefined) p.best_seller = Boolean(best_seller);
     if (sale_featured !== undefined) p.sale_featured = Boolean(sale_featured);
     await store.saveProduct(p);
+    const changes = [];
+    if (before.price !== p.price) changes.push(`price: ${before.price} → ${p.price} Ks`);
+    if (before.sale_price !== p.sale_price) changes.push(`sale price: ${before.sale_price == null ? '—' : before.sale_price} → ${p.sale_price == null ? '—' : p.sale_price} Ks`);
+    if (before.best_seller !== Boolean(p.best_seller)) changes.push(`best seller: ${before.best_seller ? 'on' : 'off'} → ${p.best_seller ? 'on' : 'off'}`);
+    if (before.sale_featured !== Boolean(p.sale_featured)) changes.push(`sale featured: ${before.sale_featured ? 'on' : 'off'} → ${p.sale_featured ? 'on' : 'off'}`);
+    if (Array.isArray(p.options)) {
+      for (const o of p.options) {
+        const b = before.options.find((x) => normName(x.label) === normName(o.label));
+        if (b && b.price !== o.price) changes.push(`${o.label}: ${b.price} → ${o.price} Ks`);
+      }
+    }
+    if (changes.length) await logActivity(req, 'product_update', 'product', p.id, `${p.name} — ${changes.join('; ')}`);
     return res.json(p);
   } catch (err) { return next(err); }
 });
@@ -915,6 +965,7 @@ app.post('/api/manage/products/:id/image', authMiddleware, managerMiddleware, as
     if (buf.length > 1500 * 1024) return res.status(400).json({ error: 'image_too_large' });
     p.image_url = image_data;
     await store.saveProduct(p);
+    await logActivity(req, 'product_photo_add', 'product', p.id, p.name);
     return res.json({ ok: true, image_url: p.image_url });
   } catch (err) { return next(err); }
 });
@@ -925,6 +976,7 @@ app.delete('/api/manage/products/:id/image', authMiddleware, managerMiddleware, 
     if (!p) return res.status(404).json({ error: 'product_not_found' });
     p.image_url = null;
     await store.saveProduct(p);
+    await logActivity(req, 'product_photo_remove', 'product', p.id, p.name);
     return res.json({ ok: true });
   } catch (err) { return next(err); }
 });
@@ -950,6 +1002,11 @@ app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, r
       customers: cleanArr(customers).map((p) => normalizePhone(p)).filter((p) => isValidMyanmarPhone(p)),
     };
     await store.saveCoupon(coupon);
+    const scopeBits = [];
+    if (coupon.brands.length) scopeBits.push('brands: ' + coupon.brands.join(', '));
+    if (coupon.products.length) scopeBits.push(coupon.products.length + ' products');
+    if (coupon.customers.length) scopeBits.push(coupon.customers.length + ' customers');
+    await logActivity(req, 'coupon_create', 'coupon', coupon.code, `${coupon.type} ${coupon.value}${coupon.type === 'percent' ? '%' : ' Ks'}${scopeBits.length ? ' — ' + scopeBits.join('; ') : ''}`);
     return res.status(201).json(coupon);
   } catch (err) { return next(err); }
 });
@@ -957,6 +1014,7 @@ app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, r
 app.delete('/api/manage/coupons/:code', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
     await store.deleteCoupon(req.params.code);
+    await logActivity(req, 'coupon_delete', 'coupon', String(req.params.code).toUpperCase(), String(req.params.code).toUpperCase());
     return res.json({ ok: true });
   } catch (err) { return next(err); }
 });
@@ -979,6 +1037,7 @@ app.put('/api/manage/payments', authMiddleware, ownerMiddleware, async (req, res
       account_number: a.account_number,
       note: a.note || '',
     })));
+    await logActivity(req, 'payments_update', 'settings', 'payments', `${accounts.length} payment accounts`);
     return res.json(await store.listPayments());
   } catch (err) { return next(err); }
 });
@@ -995,6 +1054,7 @@ app.put('/api/manage/app-links', authMiddleware, ownerMiddleware, async (req, re
     const { play_store_url = '', app_store_url = '' } = req.body || {};
     const links = { play_store_url: String(play_store_url), app_store_url: String(app_store_url) };
     await store.setSetting('app_links', links);
+    await logActivity(req, 'app_links_update', 'settings', 'app_links', 'store links updated');
     return res.json(links);
   } catch (err) { return next(err); }
 });
@@ -1021,6 +1081,8 @@ app.put('/api/manage/settings/woocommerce', authMiddleware, ownerMiddleware, asy
       consumer_secret: consumer_secret !== undefined ? String(consumer_secret).trim() : (current.consumer_secret || ''),
     };
     await store.setSetting('woocommerce', updated);
+    // Never log the key values — only that the settings changed.
+    await logActivity(req, 'woocommerce_settings', 'settings', 'woocommerce', 'WooCommerce settings updated');
     return res.json({
       configured: Boolean(updated.site_url && updated.consumer_key && updated.consumer_secret),
       site_url: updated.site_url,
@@ -1249,6 +1311,7 @@ app.post('/api/manage/woocommerce/import-data', authMiddleware, ownerMiddleware,
     }
     const posProducts = await store.listProducts();
     const posOnlyKept = posProducts.filter((p) => !matchedIds.has(p.id)).length;
+    await logActivity(req, 'woocommerce_import', 'woocommerce', 'import', `images updated: ${updated}, already had image: ${alreadyHadImage}, POS-only kept: ${posOnlyKept}`);
     return res.json({ updated, already_had_image: alreadyHadImage, pos_only_kept: posOnlyKept });
   } catch (err) { return next(err); }
 });
