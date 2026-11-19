@@ -1352,7 +1352,7 @@ async function renderManageOrders(body) {
 async function loadMgOrders(reset) {
   const wrap = $('#mgOrderWrap');
   if (!wrap) return;
-  if (reset) wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  if (reset) { mgOrders.offset = 0; mgOrders.items = []; wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>'; }
   const params = new URLSearchParams({ limit: String(PAGE), offset: String(mgOrders.offset) });
   if (mgOrders.q) params.set('q', mgOrders.q);
   if (mgOrders.status) params.set('status', mgOrders.status);
@@ -1842,7 +1842,7 @@ function downscaleImage(file) {
 }
 async function loadMgCatalog(reset) {
   const wrap = $('#mgTableWrap');
-  if (reset) wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  if (reset) { mgCatalog.offset = 0; mgCatalog.items = []; wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>'; }
   const params = new URLSearchParams({ limit: String(PAGE), offset: String(mgCatalog.offset) });
   if (mgCatalog.q) params.set('q', mgCatalog.q);
   try {
