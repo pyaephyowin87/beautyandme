@@ -180,6 +180,11 @@ function normName(s) {
   return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+// URL-safe id from a product name: 'ANUA Toner 200 ml' -> 'anua-toner-200-ml'.
+function slugify(name) {
+  return normName(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120) || 'product';
+}
+
 // ---------- auth middleware ----------
 
 async function authMiddleware(req, res, next) {
@@ -1146,6 +1151,88 @@ app.get('/api/manage/products', authMiddleware, managerMiddleware, async (req, r
     if (req.query.sale === '1') items = items.filter((p) => p.sale_price != null && p.sale_price < p.price);
     const total = items.length;
     return res.json({ items: items.slice(offset, offset + limit), total, counts });
+  } catch (err) { return next(err); }
+});
+
+// Add a NEW product from Manage (manager only). The catalog normally comes
+// from the POS seed + WooCommerce import; this is for new arrivals that are
+// in neither yet. A product added here is website-only — no wc_id, no POS
+// row; the next WooCommerce import can only fill its photo (it never
+// overwrites an existing image). Same name twice would confuse search +
+// coupons, so a duplicate name is refused.
+app.post('/api/manage/products', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const name = String(b.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name_required' });
+    const brand = String(b.brand || '').trim();
+    if (!brand) return res.status(400).json({ error: 'brand_required' });
+    const hasOptions = Array.isArray(b.options) && b.options.length > 0;
+    const price = Number(b.price);
+    if (!hasOptions && (!Number.isFinite(price) || price <= 0)) return res.status(400).json({ error: 'invalid_price' });
+    // Sale price does not apply to option lines at checkout, so it is
+    // ignored when options are given.
+    const salePrice = hasOptions || b.sale_price == null || b.sale_price === ''
+      ? null : Number(b.sale_price);
+    if (salePrice != null && (!Number.isFinite(salePrice) || salePrice < 0)) return res.status(400).json({ error: 'invalid_sale_price' });
+    const stock = b.stock == null || b.stock === '' ? null : Number(b.stock);
+    if (stock != null && (!Number.isInteger(stock) || stock < 0)) return res.status(400).json({ error: 'invalid_stock' });
+    let options = null;
+    if (hasOptions) {
+      options = [];
+      const seen = new Set();
+      for (const o of b.options) {
+        const label = String((o && o.label) || '').trim();
+        if (!label) return res.status(400).json({ error: 'option_required' });
+        const key = normName(label);
+        if (seen.has(key)) return res.status(400).json({ error: 'duplicate_option' });
+        seen.add(key);
+        const oprice = Number(o.price);
+        if (!Number.isFinite(oprice) || oprice <= 0) return res.status(400).json({ error: 'invalid_price' });
+        const ostock = o.stock == null || o.stock === '' ? null : Number(o.stock);
+        if (ostock != null && (!Number.isInteger(ostock) || ostock < 0)) return res.status(400).json({ error: 'invalid_stock' });
+        options.push({ label, price: oprice, stock: ostock, in_stock: ostock != null ? ostock > 0 : true, sku: String(o.sku || '').trim() || null });
+      }
+    }
+    // Photo (optional): a data URL, same limits as the photo-upload endpoint.
+    let imageUrl = null;
+    if (b.image_data) {
+      const m = String(b.image_data).match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+      if (!m) return res.status(400).json({ error: 'invalid_image' });
+      if (Buffer.from(m[2], 'base64').length > 1500 * 1024) return res.status(400).json({ error: 'image_too_large' });
+      imageUrl = b.image_data;
+    }
+    const existing = await store.listProducts();
+    if (existing.some((p) => normName(p.name) === normName(name))) {
+      return res.status(400).json({ error: 'duplicate_product' });
+    }
+    let slug = slugify(name);
+    let id = slug;
+    let n = 2;
+    while (existing.some((p) => p.id === id)) { id = `${slug}-${n}`; n++; }
+    const product = {
+      id,
+      slug,
+      name,
+      brand,
+      category: String(b.category || '').trim(),
+      price: hasOptions ? Math.min(...options.map((o) => o.price)) : price,
+      sale_price: salePrice,
+      stock,
+      in_stock: stock != null ? stock > 0 : true,
+      image_url: imageUrl,
+      wc_id: null,
+      is_new: false,
+      best_seller: false,
+      sale_featured: false,
+      options,
+      sku: String(b.sku || '').trim() || null,
+      note: '',
+    };
+    if (options) product.in_stock = options.some((o) => o.in_stock);
+    await store.saveProduct(product);
+    await logActivity(req, 'product_create', 'product', product.id, `${product.name} — ${product.price} Ks`);
+    return res.status(201).json(product);
   } catch (err) { return next(err); }
 });
 
