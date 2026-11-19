@@ -59,6 +59,7 @@ const I18N = {
     transfer_note: 'လွှဲငွေသည် ပစ္စည်းဖိုး Total သာ ဖြစ်ပါတယ်။ ပို့ခကို ပစ္စည်းရောက်မှ ပေးပါ။',
     screenshot_required_err: 'Screenshot တင်ဖို့ လိုပါတယ်။ ငွေလွှဲ Screenshot တင်ပြီးမှ အော်ဒါ တင်ပါ။',
     order_failed: 'အော်ဒါ တင်မရပါ။ ပြန်ကြိုးစားကြည့်ပါ။',
+    insufficient_stock: 'ပစ္စည်း stock မလုံလောက်ပါ။ အရေအတွက် လျှော့ပြီး ပြန်ကြိုးစားပါ။',
     orders_title: 'ကျွန်ုပ်၏ အော်ဒါများ', login_needed: 'အော်ဒါများ ကြည့်ဖို့ အကောင့် ဝင်ပါ။',
     no_orders: 'အော်ဒါမရှိသေးပါ', order_detail: 'အော်ဒါ အသေးစိတ်',
     register: 'Register', password: 'Password', auth_fail: 'ဖုန်း (သို့) Password မမှန်ပါ',
@@ -163,6 +164,7 @@ const I18N = {
     transfer_note: 'Your transfer covers the products Total only. Please pay the delivery fee to the courier on delivery.',
     screenshot_required_err: 'A screenshot is required. Please upload your transfer screenshot, then place the order.',
     order_failed: 'Could not place the order. Please try again.',
+    insufficient_stock: 'Not enough stock for one of the items. Please reduce the quantity and try again.',
     orders_title: 'My Orders', login_needed: 'Please log in to see your orders.',
     no_orders: 'No orders yet', order_detail: 'Order Details',
     register: 'Register', password: 'Password', auth_fail: 'Phone or password is incorrect',
@@ -471,7 +473,9 @@ function cardHTML(p) {
   // so customers see the other options (and their prices) without opening the
   // detail page. The first option is selected by default (highlighted).
   const hasOpts = Array.isArray(p.options) && p.options.length > 0;
-  const selOpt = hasOpts ? (p.options.find((o) => o.label === state.cardOpt[p.id]) || p.options[0]) : null;
+  // Default to the first option that is actually in stock (a sold-out first
+  // option must not be the pre-selected one).
+  const selOpt = hasOpts ? (p.options.find((o) => o.label === state.cardOpt[p.id] && o.in_stock) || p.options.find((o) => o.in_stock) || p.options[0]) : null;
   const price = displayPrice(p);
   // Sale prices do not apply to option lines at checkout (options always pay
   // their option price), so option products never show a sale badge/strike.
@@ -494,7 +498,7 @@ function cardHTML(p) {
     '<span class="card-brand">' + esc(p.brand || '') + '</span>' +
     '<button type="button" class="card-name" data-open="' + esc(String(p.id)) + '" style="background:none;border:none;padding:0;text-align:left;font:inherit;color:inherit">' + esc(p.name) + '</button>' +
     '<span class="card-price" data-cardprice="' + esc(String(p.id)) + '">' + priceHTML + '</span>' +
-    (hasOpts ? '<div class="card-opts">' + p.options.map((o) => '<button type="button" class="chip' + (o.label === selOpt.label ? ' active' : '') + '" data-opt="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" data-price="' + o.price + '">' + esc(o.label) + '</button>').join('') + '</div>' : '') +
+    (hasOpts ? '<div class="card-opts">' + p.options.map((o) => '<button type="button" class="chip' + (o.label === selOpt.label ? ' active' : '') + '" data-opt="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" data-price="' + o.price + '"' + (o.in_stock ? '' : ' disabled') + '>' + esc(o.label) + '</button>').join('') + '</div>' : '') +
     '<span class="badge ' + (p.in_stock ? 'in' : 'out') + '">' + esc(p.in_stock ? t('in_stock') : t('out_stock')) + '</span>' +
     '<button type="button" class="btn btn-primary card-add" data-add="' + esc(String(p.id)) + '"' + (p.in_stock ? '' : ' disabled') + '>' + esc(t('add_cart')) + '</button>' +
     '</div></article>';
@@ -577,9 +581,11 @@ async function quickAdd(id, optLabel) {
   try {
     const p = await api('/products/' + encodeURIComponent(id));
     if (p.options && p.options.length) {
-      // A size was already picked on the card: add it straight away.
-      // Otherwise open the detail page so the customer picks one there.
-      if (optLabel) { addToCart(p, optLabel, 1); return; }
+      if (optLabel) {
+        const opt = p.options.find((o) => o.label === optLabel);
+        // A sold-out pick (stale card state) falls through to the detail page.
+        if (opt && opt.in_stock) { addToCart(p, optLabel, 1); return; }
+      }
       openProduct(id); return;
     }
     if (!p.in_stock) return;
@@ -715,7 +721,7 @@ async function openProduct(id) {
     const p = await api('/products/' + encodeURIComponent(id));
     state.detail = p;
     state.detailQty = 1;
-    state.detailOption = (p.options && p.options.length) ? p.options[0].label : null;
+    state.detailOption = (p.options && p.options.length) ? (p.options.find((o) => o.in_stock) || p.options[0]).label : null;
     renderDetail();
   } catch (e) {
     $('#detailBody').innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
@@ -724,7 +730,7 @@ async function openProduct(id) {
 function selectedOptionObj() {
   const p = state.detail;
   if (!p || !p.options || !p.options.length) return null;
-  return p.options.find((o) => o.label === state.detailOption) || p.options[0];
+  return p.options.find((o) => o.label === state.detailOption && o.in_stock) || p.options.find((o) => o.in_stock) || p.options[0];
 }
 function renderDetail() {
   const p = state.detail;
@@ -736,7 +742,7 @@ function renderDetail() {
   if (p.options && p.options.length) {
     optsHTML = '<div class="field"><label>' + esc(t('select_option')) + '</label><div class="opt-row">' +
       p.options.map((o) =>
-        '<button type="button" class="opt-btn' + (state.detailOption === o.label ? ' active' : '') + '" data-opt="' + esc(o.label) + '">' +
+        '<button type="button" class="opt-btn' + (state.detailOption === o.label ? ' active' : '') + '" data-opt="' + esc(o.label) + '"' + (o.in_stock ? '' : ' disabled') + '>' +
         esc(o.label) + ' — ' + fmt(o.price) + '</button>').join('') +
       '</div></div>';
   }
@@ -1117,6 +1123,8 @@ async function placeOrder() {
     btn.disabled = false;
     if (e.status === 400 && e.data && e.data.error === 'screenshot_required') {
       err.textContent = t('screenshot_required_err');
+    } else if (e.data && (e.data.error === 'insufficient_stock' || e.data.error === 'out_of_stock')) {
+      err.textContent = t('insufficient_stock');
     } else if (e.data && e.data.error) {
       err.textContent = e.data.error;
     } else {
@@ -1901,13 +1909,19 @@ function paintMgCatalog() {
       (p.image_url ? ' <button type="button" data-rmphoto="' + esc(String(p.id)) + '" title="' + esc(t('remove_photo')) + '" style="border:0;background:none;color:var(--muted);font-size:13px;padding:0 2px">✕</button>' : '') +
       (Array.isArray(p.options) && p.options.length ? '<div style="margin-top:6px">' + p.options.map((o) =>
         '<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span style="font-size:12px;color:var(--muted);flex:1;min-width:0">' + esc(o.label) + '</span>' +
-        '<input type="number" min="1" step="500" value="' + o.price + '" data-optprice="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:92px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px"></div>').join('') + '</div>' : '') +
+        '<input type="number" min="1" step="500" value="' + o.price + '" data-optprice="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:92px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px">' +
+        '<input type="number" min="0" step="1" value="' + (o.stock != null ? o.stock : '') + '" placeholder="—" title="' + esc(t('stock_qty')) + ' — 0 = ' + esc(t('out_stock')) + '" data-optstock="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:64px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px"></div>').join('') + '</div>' : '') +
       '</div></div></td>' +
       '<td data-label="' + esc(t('price')) + '">' + (Array.isArray(p.options) && p.options.length
         ? fmt(p.price)
         : '<input type="number" min="1" step="500" value="' + p.price + '" data-price="' + esc(String(p.id)) + '" style="width:92px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px">') + '</td>' +
       '<td data-label="' + esc(t('sale_price')) + '"><input type="number" min="0" step="500" value="' + (p.sale_price != null ? p.sale_price : '') + '" placeholder="' + fmt(p.price) + '" data-sale="' + esc(String(p.id)) + '"></td>' +
-      '<td data-label="' + esc(t('stock_qty')) + '"><strong>' + esc(String(p.stock != null ? p.stock : (p.quantity != null ? p.quantity : '—'))) + '</strong></td>' +
+      '<td data-label="' + esc(t('stock_qty')) + '">' + (Array.isArray(p.options) && p.options.length
+        // Option products keep stock per option (inputs under the name); the
+        // cell just shows the total of the managed option stocks.
+        ? '<strong>' + esc(String(p.options.every((o) => o.stock == null) ? '—' : p.options.reduce((a, o) => a + (o.stock || 0), 0))) + '</strong>'
+        // Empty = not managed on the website (today's behaviour); 0 = sold out.
+        : '<input type="number" min="0" step="1" value="' + (p.stock != null ? p.stock : '') + '" placeholder="—" data-stock="' + esc(String(p.id)) + '" style="width:76px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px">') + '</td>' +
       '<td data-label="' + esc(t('sale_featured')) + '"><button type="button" class="toggle' + (p.sale_featured ? ' on' : '') + '" data-tgl="sale_featured" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('sale_featured')) + '"></button></td>' +
       '<td data-label="' + esc(t('best_seller')) + '"><button type="button" class="toggle' + (p.best_seller ? ' on' : '') + '" data-tgl="best_seller" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('best_seller')) + '"></button></td>' +
       '</tr>').join('') + '</tbody></table>';
@@ -1943,6 +1957,34 @@ function paintMgCatalog() {
       try {
         const updated = await api('/manage/products/' + encodeURIComponent(inp.dataset.optprice), { method: 'PATCH', body: JSON.stringify({ option_prices: { [inp.dataset.label]: val } }) });
         const item = mgCatalog.items.find((x) => String(x.id) === inp.dataset.optprice);
+        if (item && updated) { Object.assign(item, updated); paintMgCatalog(); }
+        toast(t('saved'));
+      } catch (e) { toast(t('error_load')); paintMgCatalog(); }
+    });
+  });
+  // Website stock: empty = not managed on the website, 0 = sold out.
+  // A customer order takes units out of this number; cancelling returns them.
+  $$('[data-stock]', wrap).forEach((inp) => {
+    inp.addEventListener('change', async () => {
+      const raw = inp.value.trim();
+      const val = raw === '' ? null : Number(raw);
+      if (val !== null && (!Number.isInteger(val) || val < 0)) { toast(t('error_load')); paintMgCatalog(); return; }
+      try {
+        const updated = await api('/manage/products/' + encodeURIComponent(inp.dataset.stock), { method: 'PATCH', body: JSON.stringify({ stock: val }) });
+        const item = mgCatalog.items.find((x) => String(x.id) === inp.dataset.stock);
+        if (item && updated) { Object.assign(item, updated); paintMgCatalog(); }
+        toast(t('saved'));
+      } catch (e) { toast(t('error_load')); paintMgCatalog(); }
+    });
+  });
+  $$('[data-optstock]', wrap).forEach((inp) => {
+    inp.addEventListener('change', async () => {
+      const raw = inp.value.trim();
+      const val = raw === '' ? null : Number(raw);
+      if (val !== null && (!Number.isInteger(val) || val < 0)) { toast(t('error_load')); paintMgCatalog(); return; }
+      try {
+        const updated = await api('/manage/products/' + encodeURIComponent(inp.dataset.optstock), { method: 'PATCH', body: JSON.stringify({ option_stock: { [inp.dataset.label]: val } }) });
+        const item = mgCatalog.items.find((x) => String(x.id) === inp.dataset.optstock);
         if (item && updated) { Object.assign(item, updated); paintMgCatalog(); }
         toast(t('saved'));
       } catch (e) { toast(t('error_load')); paintMgCatalog(); }

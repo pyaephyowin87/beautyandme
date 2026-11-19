@@ -79,6 +79,7 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
   border-radius:999px; padding:7px 14px; font-size:14px; font-weight:600;
 }
 .chip.active{background:var(--grad);color:#fff;border-color:transparent}
+.chip:disabled,.opt-btn:disabled{opacity:.45;text-decoration:line-through;cursor:not-allowed}
 
 /* ---------- Product grid / rows ---------- */
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
