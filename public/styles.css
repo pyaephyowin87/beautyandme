@@ -134,6 +134,11 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
   color:var(--muted); font-size:12px; font-weight:600; padding:4px 0; position:relative;
 }
 .nav-item.active{color:var(--pink)}
+/* Floating Messenger button — fixed above the bottom nav (z 30: below the
+   cart drawer 35/36 and modals 50+, so it never covers them). */
+.msg-fab{position:fixed;right:14px;bottom:calc(76px + env(safe-area-inset-bottom));width:52px;height:52px;border-radius:50%;background:#0084FF;color:#fff;border:none;box-shadow:0 4px 14px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;z-index:30;text-decoration:none}
+.msg-fab svg{width:28px;height:28px;fill:#fff}
+.msg-fab:active{transform:scale(.96)}
 .nav-ico{font-size:20px;line-height:1;position:relative}
 .nav-badge{
   position:absolute; top:-7px; right:-13px; min-width:17px; height:17px; padding:0 4px;

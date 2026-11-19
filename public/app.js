@@ -413,8 +413,10 @@ async function loadShopInfo() {
     state.shopInfo = await api('/shop-info');
   } catch (e) { state.shopInfo = null; }
   const info = state.shopInfo;
-  if (info && info.messenger_url) $('#messengerLink').href = info.messenger_url;
-  else $('#messengerLink').href = 'https://m.me/beautyandme117';
+  const msgUrl = (info && info.messenger_url) || 'https://m.me/beautyandme117';
+  $('#messengerLink').href = msgUrl;
+  const fab = $('#msgFabLink');
+  if (fab) fab.href = msgUrl;
 }
 function appLinkUrl(kind) {
   if (!state.shopInfo || !state.shopInfo.app_links) return '';
