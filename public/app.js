@@ -1289,7 +1289,15 @@ async function openOrderDetail(id) {
 }
 
 /* ---------------- manage ---------------- */
+// Payments, App link and WooCommerce are OWNER-ONLY — managers must not
+// see them (a wrong payment account or API key there breaks the whole shop).
+const OWNER_TABS = ['payments', 'applink', 'woocommerce'];
 function loadManage(tab) {
+  const isOwner = state.user && (state.user.is_owner || state.user.phone === '095117366');
+  $$('#manageTabs .tab').forEach((b) => {
+    b.style.display = (!isOwner && OWNER_TABS.indexOf(b.dataset.mtab) !== -1) ? 'none' : '';
+  });
+  if (!isOwner && OWNER_TABS.indexOf(tab) !== -1) tab = 'dashboard';
   state.manageTab = tab;
   $$('#manageTabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.mtab === tab));
   const body = $('#manageBody');
@@ -1415,9 +1423,14 @@ async function openAdminOrder(id) {
 async function loadAdminScreenshot(orderId) {
   try {
     const res = await fetch('/api/manage/orders/' + encodeURIComponent(orderId) + '/screenshot', { headers: { 'Authorization': 'Bearer ' + state.token } });
-    if (!res.ok) return;
-    const blob = await res.blob();
     const img = $('#adminShotImg');
+    if (!res.ok) {
+      // The order recorded a screenshot but the file is gone (orders placed
+      // before screenshots moved to the database lost theirs on redeploy).
+      if (img) img.outerHTML = '<div class="empty">' + esc(t('no_screenshot')) + '</div>';
+      return;
+    }
+    const blob = await res.blob();
     if (img) { img.src = URL.createObjectURL(blob); img.hidden = false; }
   } catch (e) { /* no screenshot to show */ }
 }
@@ -1488,7 +1501,7 @@ async function loadMgManagers() {
 async function loadMgUsers(reset) {
   const wrap = $('#mgUserWrap');
   if (!wrap) return;
-  if (reset) wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  if (reset) { mgUsers.offset = 0; mgUsers.items = []; wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>'; }
   const params = new URLSearchParams({ limit: String(PAGE), offset: String(mgUsers.offset) });
   if (mgUsers.q) params.set('q', mgUsers.q);
   const isOwner = state.user && state.user.phone === '095117366';
@@ -1650,8 +1663,13 @@ function paintMgCatalog() {
         : '<span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line);border-radius:8px;color:var(--muted);font-size:22px;line-height:1">+</span>') +
       '</div><div style="min-width:0"><strong>' + esc(p.name) + '</strong><br><span style="color:var(--muted);font-size:12px">' + esc(p.brand || '') + '</span>' +
       (p.image_url ? ' <button type="button" data-rmphoto="' + esc(String(p.id)) + '" title="' + esc(t('remove_photo')) + '" style="border:0;background:none;color:var(--muted);font-size:13px;padding:0 2px">✕</button>' : '') +
+      (Array.isArray(p.options) && p.options.length ? '<div style="margin-top:6px">' + p.options.map((o) =>
+        '<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span style="font-size:12px;color:var(--muted);flex:1;min-width:0">' + esc(o.label) + '</span>' +
+        '<input type="number" min="1" step="500" value="' + o.price + '" data-optprice="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:92px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px"></div>').join('') + '</div>' : '') +
       '</div></div></td>' +
-      '<td>' + fmt(p.price) + '</td>' +
+      '<td>' + (Array.isArray(p.options) && p.options.length
+        ? fmt(p.price)
+        : '<input type="number" min="1" step="500" value="' + p.price + '" data-price="' + esc(String(p.id)) + '" style="width:92px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px">') + '</td>' +
       '<td><input type="number" min="0" step="500" value="' + (p.sale_price != null ? p.sale_price : '') + '" placeholder="' + fmt(p.price) + '" data-sale="' + esc(String(p.id)) + '"></td>' +
       '<td><strong>' + esc(String(p.stock != null ? p.stock : (p.quantity != null ? p.quantity : '—'))) + '</strong></td>' +
       '<td><button type="button" class="toggle' + (p.sale_featured ? ' on' : '') + '" data-tgl="sale_featured" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('sale_featured')) + '"></button></td>' +
@@ -1664,6 +1682,34 @@ function paintMgCatalog() {
         await api('/manage/products/' + encodeURIComponent(inp.dataset.sale), { method: 'PATCH', body: JSON.stringify({ sale_price: val }) });
         toast(t('saved'));
       } catch (e) { toast(t('error_load')); }
+    });
+  });
+  // Selling price: editable for single-price products. For products with
+  // options the customer pays the OPTION price, so each option has its own
+  // price input under the product name instead.
+  $$('[data-price]', wrap).forEach((inp) => {
+    inp.addEventListener('change', async () => {
+      const val = Number(inp.value);
+      if (!val || val <= 0) { toast(t('error_load')); paintMgCatalog(); return; }
+      try {
+        await api('/manage/products/' + encodeURIComponent(inp.dataset.price), { method: 'PATCH', body: JSON.stringify({ price: val }) });
+        const item = mgCatalog.items.find((x) => String(x.id) === inp.dataset.price);
+        if (item) item.price = val;
+        paintMgCatalog();
+        toast(t('saved'));
+      } catch (e) { toast(t('error_load')); paintMgCatalog(); }
+    });
+  });
+  $$('[data-optprice]', wrap).forEach((inp) => {
+    inp.addEventListener('change', async () => {
+      const val = Number(inp.value);
+      if (!val || val <= 0) { toast(t('error_load')); paintMgCatalog(); return; }
+      try {
+        const updated = await api('/manage/products/' + encodeURIComponent(inp.dataset.optprice), { method: 'PATCH', body: JSON.stringify({ option_prices: { [inp.dataset.label]: val } }) });
+        const item = mgCatalog.items.find((x) => String(x.id) === inp.dataset.optprice);
+        if (item && updated) { Object.assign(item, updated); paintMgCatalog(); }
+        toast(t('saved'));
+      } catch (e) { toast(t('error_load')); paintMgCatalog(); }
     });
   });
   $$('[data-tgl]', wrap).forEach((btn) => {
