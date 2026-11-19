@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Beauty &amp; Me — K-Beauty Shop</title>
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 <link rel="icon" href="logo.png">
 </head>
 <body>
@@ -17,10 +17,6 @@
     <div class="header-actions">
       <button id="langToggle" class="btn btn-ghost" type="button">EN</button>
       <button id="authBtn" class="btn btn-ghost" type="button"></button>
-      <button id="cartBtn" class="btn btn-primary cart-btn" type="button">
-        <span id="cartBtnLabel">ခြင်းတောင်း</span>
-        <span id="cartCount" class="cart-count" hidden>0</span>
-      </button>
     </div>
   </div>
   <div class="search-row">
@@ -39,39 +35,39 @@
     <div id="brandChips" class="chips"></div>
     <div id="typeChips" class="chips"></div>
 
-    <div class="section-head">
-      <h2 id="bestTitle">အရောင်းရဆုံး</h2>
-      <button class="link-btn" data-viewall="best" type="button">အားလုံးကြည့်မယ်</button>
-    </div>
-    <div id="rowBest" class="hrow"></div>
+    <div id="homeSections">
+      <div class="section-head">
+        <h2 id="bestTitle">အရောင်းရဆုံး</h2>
+        <button class="link-btn" data-viewall="best" type="button">အားလုံးကြည့်မယ်</button>
+      </div>
+      <div id="rowBest" class="hrow"></div>
 
-    <div class="section-head" id="saleSectionHead" hidden>
-      <h2 id="saleTitle">လျှော့ဈေး</h2>
-      <button class="link-btn" data-viewall="sale" type="button">အားလုံးကြည့်မယ်</button>
-    </div>
-    <div id="rowSale" class="hrow"></div>
+      <div class="section-head" id="saleSectionHead" hidden>
+        <h2 id="saleTitle">လျှော့ဈေး</h2>
+        <button class="link-btn" data-viewall="sale" type="button">အားလုံးကြည့်မယ်</button>
+      </div>
+      <div id="rowSale" class="hrow"></div>
 
-    <div class="section-head">
-      <h2 id="newTitle">ပစ္စည်းအသစ်</h2>
-      <button class="link-btn" data-viewall="new" type="button">အားလုံးကြည့်မယ်</button>
+      <div class="section-head">
+        <h2 id="newTitle">ပစ္စည်းအသစ်</h2>
+        <button class="link-btn" data-viewall="new" type="button">အားလုံးကြည့်မယ်</button>
+      </div>
+      <div id="rowNew" class="hrow"></div>
     </div>
-    <div id="rowNew" class="hrow"></div>
 
     <div class="section-head">
       <h2 id="allTitle">ပစ္စည်းအားလုံး</h2>
+      <button id="homeClearBtn" class="link-btn" type="button" hidden>✕ ဖယ်မယ်</button>
     </div>
+    <div id="homeMeta" class="meta-line"></div>
     <div id="gridHome" class="grid"></div>
     <div id="homeMoreWrap" class="center"><button id="homeMoreBtn" class="btn btn-outline" type="button">နောက်ထပ် ပြမယ်</button></div>
   </section>
 
-  <!-- SHOP VIEW -->
-  <section id="view-shop" class="view" hidden>
-    <div class="section-head"><h2 id="shopTitle">ဆိုင်</h2></div>
-    <div id="shopBrandChips" class="chips"></div>
-    <div id="shopTypeChips" class="chips"></div>
-    <div id="shopMeta" class="meta-line"></div>
-    <div id="gridShop" class="grid"></div>
-    <div class="center"><button id="shopMoreBtn" class="btn btn-outline" type="button">နောက်ထပ် ပြမယ်</button></div>
+  <!-- WISHLIST VIEW -->
+  <section id="view-wishlist" class="view" hidden>
+    <div class="section-head"><h2 id="wishlistTitle">အကြိုက်ဆုံး ပစ္စည်းများ</h2></div>
+    <div id="gridWish" class="grid"></div>
   </section>
 
   <!-- ORDERS VIEW -->
@@ -118,7 +114,8 @@
 
 <nav class="bottom-nav">
   <button class="nav-item active" data-view="home" type="button"><span class="nav-ico">⌂</span><span class="nav-label" data-i18n="nav_home">Home</span></button>
-  <button class="nav-item" data-view="shop" type="button"><span class="nav-ico">▦</span><span class="nav-label" data-i18n="nav_shop">ဆိုင်</span></button>
+  <button class="nav-item" data-view="cart" type="button"><span class="nav-ico">🛒<span id="navCartCount" class="nav-badge" hidden>0</span></span><span class="nav-label" data-i18n="nav_cart">ခြင်းတောင်း</span></button>
+  <button class="nav-item" data-view="wishlist" type="button"><span class="nav-ico">♥<span id="navWishCount" class="nav-badge" hidden>0</span></span><span class="nav-label" data-i18n="nav_wishlist">အကြိုက်ဆုံး</span></button>
   <button class="nav-item" data-view="orders" type="button"><span class="nav-ico">▤</span><span class="nav-label" data-i18n="nav_orders">အော်ဒါများ</span></button>
   <button class="nav-item" data-view="manage" id="navManage" type="button" hidden><span class="nav-ico">⚙</span><span class="nav-label" data-i18n="nav_manage">Manage</span></button>
 </nav>
@@ -197,6 +194,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
