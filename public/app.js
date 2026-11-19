@@ -94,6 +94,16 @@ const I18N = {
     user_not_found: 'ဒီဖုန်းနဲ့ အကောင့် မရှိသေးပါ — အရင် register လုပ်ခိုင်းပါ',
     owner_only: 'Owner (095117366) ပဲ လုပ်နိုင်ပါတယ်', no_users: 'User မရှိသေးပါ',
     pw_reset_hint: 'ချိန်းပြီးရင် customer ကို Messenger / ဖုန်း နဲ့ password အသစ်ကို ပြောပေးပါ — customer က အသစ်နဲ့ ပြန်ဝင်ရမယ်',
+    manager_hint: 'ဝန်ထမ်းက ဆိုင်မှာ အရင် register လုပ်ထားရမယ် (နာမည် + ဖုန်း) — ပြီးမှ ဒီမှာ ဖုန်းနံပါတ် ရိုက်ပြီး Add လုပ်ပါ',
+    add_photo: 'ပုံထည့်မယ်', change_photo: 'ပုံပြောင်းမယ်', remove_photo: 'ပုံဖျက်မယ်',
+    coupon_scope: 'Coupon သက်ရောက်မယ့် အရာ (မရွေးရင် ပစ္စည်းအားလုံးအတွက်)',
+    scope_brands: 'Brand များ', scope_products: 'ပစ္စည်းများ', scope_customers: 'Customer များ (ဖုန်း)',
+    scope_customers_hint: 'ဖုန်းနံပါတ် ရိုက်ပြီး Add လုပ်ပါ — မထည့်ရင် customer အားလုံးအတွက်',
+    coupon_for_brands: 'ဒီ brand တွေအတွက်သာ', coupon_for_products: 'ဒီ ပစ္စည်းတွေအတွက်သာ',
+    coupon_for_customers: 'သတ်မှတ်ထားတဲ့ customer တွေအတွက်သာ', coupon_for_all: 'ပစ္စည်းအားလုံးအတွက်',
+    coupon_not_for_customer: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ customer တွေအတွက်ပဲ သုံးလို့ရပါတယ်',
+    coupon_no_eligible_items: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ ပစ္စည်း / brand တွေအတွက်ပဲ သုံးလို့ရပါတယ် — cart ထဲမှာ အဲဒါတွေ မရှိသေးပါ',
+    search_products_ph: 'ပစ္စည်း ရှာပါ…', no_products_found: 'ပစ္စည်း မတွေ့ပါ',
     shop_phone: 'ဖုန်း', shop_hours: 'ဖွင့်ချိန် — နေ့စဉ် မနက် ၉ နာရီ မှ ညနေ ၆ နာရီ',
     continue_shopping: 'ဆက်ပြီး ဈေးဝယ်မယ်', back_home: 'Home ပြန်မယ်',
     select_option: 'Option ရွေးပါ', search_products: 'ပစ္စည်း ရှာမယ်…',
@@ -184,6 +194,16 @@ const I18N = {
     user_not_found: 'No account with this phone — ask them to register first',
     owner_only: 'Only the owner (095117366) can do this', no_users: 'No users yet',
     pw_reset_hint: 'After changing, tell the customer the new password by Messenger / phone — they will sign in again with it',
+    manager_hint: 'Staff must register in the shop first (name + phone) — then type their phone here and tap Add',
+    add_photo: 'Add photo', change_photo: 'Change photo', remove_photo: 'Remove photo',
+    coupon_scope: 'What this coupon applies to (leave empty = all products)',
+    scope_brands: 'Brands', scope_products: 'Products', scope_customers: 'Customers (phone)',
+    scope_customers_hint: 'Type a phone number and tap Add — leave empty for all customers',
+    coupon_for_brands: 'For these brands only', coupon_for_products: 'For these products only',
+    coupon_for_customers: 'For selected customers only', coupon_for_all: 'For all products',
+    coupon_not_for_customer: 'This coupon is only for selected customers',
+    coupon_no_eligible_items: 'This coupon only applies to selected products / brands — none are in your cart yet',
+    search_products_ph: 'Search products…', no_products_found: 'No products found',
     shop_phone: 'Phone', shop_hours: 'Open daily 9 AM – 6 PM',
     continue_shopping: 'Continue shopping', back_home: 'Back to Home',
     select_option: 'Choose an option', search_products: 'Search products…',
@@ -288,9 +308,23 @@ function cartCount() { return state.cart.reduce((a, i) => a + i.qty, 0); }
 function cartSubtotal() { return state.cart.reduce((a, i) => a + i.price * i.qty, 0); }
 function couponDiscount() {
   if (!state.coupon) return 0;
-  const sub = cartSubtotal();
-  if (state.coupon.type === 'percent') return Math.round(sub * Number(state.coupon.value) / 100);
-  return Math.min(Number(state.coupon.value) || 0, sub);
+  // A scoped coupon discounts only its matching items, never the whole cart.
+  const c = state.coupon;
+  const base = state.cart.reduce((a, i) => {
+    const brandOk = !c.brands || !c.brands.length || c.brands.includes(i.brand);
+    const prodOk = !c.products || !c.products.length || c.products.includes(i.product_id);
+    return (brandOk && prodOk) ? a + i.price * i.qty : a;
+  }, 0);
+  if (base <= 0) return 0;
+  if (c.type === 'percent') return Math.round(base * Number(c.value) / 100);
+  return Math.min(Number(c.value) || 0, base);
+}
+function couponScopeText(c) {
+  const parts = [];
+  if (c.brands && c.brands.length) parts.push(t('coupon_for_brands') + ': ' + c.brands.join(', '));
+  if (c.products && c.products.length) parts.push(t('coupon_for_products') + ': ' + ((c.product_names && c.product_names.length ? c.product_names : c.products).join(', ')));
+  if ((c.customers && c.customers.length) || c.customers_only) parts.push(t('coupon_for_customers') + (c.customers && c.customers.length ? ' (' + c.customers.length + ')' : ''));
+  return parts.length ? parts.join(' • ') : t('coupon_for_all');
 }
 function cartTotal() { return Math.max(0, cartSubtotal() - couponDiscount()); }
 function updateCartBadge() {
@@ -771,21 +805,23 @@ async function applyCoupon() {
   const code = $('#couponInput').value.trim().toUpperCase();
   const msg = $('#couponMsg');
   if (!code) return;
+  const fail = (key) => {
+    state.coupon = null; saveCoupon(); renderCart();
+    msg.textContent = t(key || 'coupon_invalid');
+    msg.style.color = '#B3261E';
+  };
   try {
-    const res = await api('/coupons/validate', { method: 'POST', body: JSON.stringify({ code: code }) });
+    const phone = (state.user && state.user.phone) || (state.coForm && state.coForm.phone) || '';
+    const res = await api('/coupons/validate', { method: 'POST', body: JSON.stringify({ code: code, items: state.cart.map((i) => ({ product_id: i.product_id, qty: i.qty })), phone: phone }) });
     if (res.valid) {
-      state.coupon = { code: res.code || code, type: res.type, value: res.value };
+      state.coupon = { code: res.code || code, type: res.type, value: res.value, brands: res.brands || [], products: res.products || [] };
       saveCoupon();
       renderCart();
-    } else {
-      state.coupon = null; saveCoupon(); renderCart();
-      msg.textContent = t('coupon_invalid');
-      msg.style.color = '#B3261E';
-    }
+    } else if (res.reason === 'not_for_customer') fail('coupon_not_for_customer');
+    else if (res.reason === 'no_eligible_items') fail('coupon_no_eligible_items');
+    else fail('coupon_invalid');
   } catch (e) {
-    state.coupon = null; saveCoupon(); renderCart();
-    msg.textContent = t('coupon_invalid');
-    msg.style.color = '#B3261E';
+    fail('coupon_invalid');
   }
 }
 
@@ -801,8 +837,9 @@ async function openCouponList() {
       const val = c.type === 'fixed'
         ? fmt(c.value).replace(' Ks', '') + ' ' + t('amount_off')
         : c.value + t('percent_off');
+      const scope = couponScopeText(c);
       return '<div class="pay-account"><div class="pa-info"><div class="pa-method">' + esc(c.code) + '</div>' +
-        '<div class="pa-name">' + esc(val) + '</div></div>' +
+        '<div class="pa-name">' + esc(val) + '</div><div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(scope) + '</div></div>' +
         '<button type="button" class="copy-btn" data-use="' + esc(c.code) + '">' + esc(t('use_coupon')) + '</button></div>';
     }).join('');
     $$('[data-use]', body).forEach((b) => b.addEventListener('click', () => {
@@ -1392,7 +1429,8 @@ async function renderManageUsers(body) {
   body.innerHTML =
     (isOwner ? '<div class="mg-card"><h3>' + esc(t('managers_title')) + '</h3><div id="mgManagersWrap"><div class="loading">' + esc(t('loading')) + '</div></div>' +
       '<div class="row-flex" style="margin-top:12px"><input id="mgAddManagerPhone" type="tel" placeholder="' + esc(t('add_manager_ph')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
-      '<button class="btn btn-primary" type="button" id="mgAddManagerBtn">' + esc(t('add')) + '</button></div></div>' : '') +
+      '<button class="btn btn-primary" type="button" id="mgAddManagerBtn">' + esc(t('add')) + '</button></div>' +
+      '<div style="margin-top:6px;font-size:12px;color:var(--muted)">' + esc(t('manager_hint')) + '</div></div>' : '') +
     '<div class="mg-card"><div class="row-flex">' +
     '<input id="mgUserSearch" type="search" placeholder="' + esc(t('search_users')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
     '<button class="btn btn-primary" type="button" id="mgUserSearchBtn">' + esc(t('search_btn')) + '</button>' +
@@ -1531,7 +1569,8 @@ async function renderManageCatalog(body) {
     '<input id="mgSearch" type="search" placeholder="' + esc(t('search_products')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
     '<button class="btn btn-primary" type="button" id="mgSearchBtn">' + esc(t('search_btn')) + '</button>' +
     '</div><div id="mgTableWrap" class="table-wrap" style="margin-top:12px"></div>' +
-    '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgMoreBtn">' + esc(t('more')) + '</button></div></div>';
+    '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgMoreBtn">' + esc(t('more')) + '</button></div>' +
+    '<input id="mgPhotoInput" type="file" accept="image/*" hidden></div>';
   mgCatalog = { q: '', offset: 0, items: [] };
   const doSearch = () => {
     mgCatalog.q = $('#mgSearch').value.trim();
@@ -1541,7 +1580,46 @@ async function renderManageCatalog(body) {
   $('#mgSearchBtn').addEventListener('click', doSearch);
   $('#mgSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
   $('#mgMoreBtn').addEventListener('click', () => loadMgCatalog(false));
+  $('#mgPhotoInput').addEventListener('change', async () => {
+    const input = $('#mgPhotoInput');
+    const file = input.files && input.files[0];
+    const pid = input.dataset.pid;
+    input.value = '';
+    if (!file || !pid) return;
+    try {
+      const dataUrl = await downscaleImage(file);
+      const res = await api('/manage/products/' + encodeURIComponent(pid) + '/image', { method: 'POST', body: JSON.stringify({ image_data: dataUrl }) });
+      const item = mgCatalog.items.find((x) => String(x.id) === pid);
+      if (item) item.image_url = res.image_url || dataUrl;
+      paintMgCatalog();
+      toast(t('saved'));
+    } catch (e) { toast(t('error_load')); }
+  });
   loadMgCatalog(true);
+}
+// Downscale a picked photo to max 800px JPEG before upload — keeps the
+// upload small and the stored image a sensible size for product cards.
+function downscaleImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 800;
+        const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => reject(new Error('bad_image'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('bad_image'));
+    reader.readAsDataURL(file);
+  });
 }
 async function loadMgCatalog(reset) {
   const wrap = $('#mgTableWrap');
@@ -1554,38 +1632,67 @@ async function loadMgCatalog(reset) {
     if (reset) mgCatalog.items = items; else mgCatalog.items = mgCatalog.items.concat(items);
     mgCatalog.offset += items.length;
     $('#mgMoreBtn').style.display = (data.total != null && mgCatalog.offset < data.total) ? '' : 'none';
-    if (!mgCatalog.items.length) { wrap.innerHTML = '<div class="empty">' + esc(t('empty')) + '</div>'; return; }
-    wrap.innerHTML = '<table class="mg-table"><thead><tr><th>' + esc(t('products')) + '</th><th>' + esc(t('price')) + '</th><th>' + esc(t('sale_price')) + '</th><th>' + esc(t('stock_qty')) + '</th><th>' + esc(t('sale_featured')) + '</th><th>' + esc(t('best_seller')) + '</th></tr></thead><tbody>' +
-      mgCatalog.items.map((p) =>
-        '<tr><td><strong>' + esc(p.name) + '</strong><br><span style="color:var(--muted);font-size:12px">' + esc(p.brand || '') + '</span></td>' +
-        '<td>' + fmt(p.price) + '</td>' +
-        '<td><input type="number" min="0" step="500" value="' + (p.sale_price != null ? p.sale_price : '') + '" placeholder="' + fmt(p.price) + '" data-sale="' + esc(String(p.id)) + '"></td>' +
-        '<td><strong>' + esc(String(p.stock != null ? p.stock : (p.quantity != null ? p.quantity : '—'))) + '</strong></td>' +
-        '<td><button type="button" class="toggle' + (p.sale_featured ? ' on' : '') + '" data-tgl="sale_featured" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('sale_featured')) + '"></button></td>' +
-        '<td><button type="button" class="toggle' + (p.best_seller ? ' on' : '') + '" data-tgl="best_seller" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('best_seller')) + '"></button></td>' +
-        '</tr>').join('') + '</tbody></table>';
-    $$('[data-sale]', wrap).forEach((inp) => {
-      inp.addEventListener('change', async () => {
-        const val = inp.value === '' ? null : Number(inp.value);
-        try {
-          await api('/manage/products/' + encodeURIComponent(inp.dataset.sale), { method: 'PATCH', body: JSON.stringify({ sale_price: val }) });
-          toast(t('saved'));
-        } catch (e) { toast(t('error_load')); }
-      });
-    });
-    $$('[data-tgl]', wrap).forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const field = btn.dataset.tgl;
-        const on = !btn.classList.contains('on');
-        try {
-          await api('/manage/products/' + encodeURIComponent(btn.dataset.id), { method: 'PATCH', body: JSON.stringify({ [field]: on }) });
-          btn.classList.toggle('on', on);
-        } catch (e) { toast(t('error_load')); }
-      });
-    });
+    paintMgCatalog();
   } catch (e) {
     if (reset) wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
   }
+}
+function paintMgCatalog() {
+  const wrap = $('#mgTableWrap');
+  if (!wrap) return;
+  if (!mgCatalog.items.length) { wrap.innerHTML = '<div class="empty">' + esc(t('empty')) + '</div>'; return; }
+  wrap.innerHTML = '<table class="mg-table"><thead><tr><th>' + esc(t('products')) + '</th><th>' + esc(t('price')) + '</th><th>' + esc(t('sale_price')) + '</th><th>' + esc(t('stock_qty')) + '</th><th>' + esc(t('sale_featured')) + '</th><th>' + esc(t('best_seller')) + '</th></tr></thead><tbody>' +
+    mgCatalog.items.map((p) =>
+      '<tr><td><div style="display:flex;gap:8px;align-items:flex-start">' +
+      '<div data-photo="' + esc(String(p.id)) + '" title="' + esc(p.image_url ? t('change_photo') : t('add_photo')) + '" style="flex:none;cursor:pointer">' +
+      (p.image_url
+        ? '<img src="' + esc(p.image_url) + '" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block">'
+        : '<span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line);border-radius:8px;color:var(--muted);font-size:22px;line-height:1">+</span>') +
+      '</div><div style="min-width:0"><strong>' + esc(p.name) + '</strong><br><span style="color:var(--muted);font-size:12px">' + esc(p.brand || '') + '</span>' +
+      (p.image_url ? ' <button type="button" data-rmphoto="' + esc(String(p.id)) + '" title="' + esc(t('remove_photo')) + '" style="border:0;background:none;color:var(--muted);font-size:13px;padding:0 2px">✕</button>' : '') +
+      '</div></div></td>' +
+      '<td>' + fmt(p.price) + '</td>' +
+      '<td><input type="number" min="0" step="500" value="' + (p.sale_price != null ? p.sale_price : '') + '" placeholder="' + fmt(p.price) + '" data-sale="' + esc(String(p.id)) + '"></td>' +
+      '<td><strong>' + esc(String(p.stock != null ? p.stock : (p.quantity != null ? p.quantity : '—'))) + '</strong></td>' +
+      '<td><button type="button" class="toggle' + (p.sale_featured ? ' on' : '') + '" data-tgl="sale_featured" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('sale_featured')) + '"></button></td>' +
+      '<td><button type="button" class="toggle' + (p.best_seller ? ' on' : '') + '" data-tgl="best_seller" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('best_seller')) + '"></button></td>' +
+      '</tr>').join('') + '</tbody></table>';
+  $$('[data-sale]', wrap).forEach((inp) => {
+    inp.addEventListener('change', async () => {
+      const val = inp.value === '' ? null : Number(inp.value);
+      try {
+        await api('/manage/products/' + encodeURIComponent(inp.dataset.sale), { method: 'PATCH', body: JSON.stringify({ sale_price: val }) });
+        toast(t('saved'));
+      } catch (e) { toast(t('error_load')); }
+    });
+  });
+  $$('[data-tgl]', wrap).forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const field = btn.dataset.tgl;
+      const on = !btn.classList.contains('on');
+      try {
+        await api('/manage/products/' + encodeURIComponent(btn.dataset.id), { method: 'PATCH', body: JSON.stringify({ [field]: on }) });
+        btn.classList.toggle('on', on);
+      } catch (e) { toast(t('error_load')); }
+    });
+  });
+  // Photo upload: tap a thumbnail (or the + box) to pick a photo for that product.
+  $$('[data-photo]', wrap).forEach((th) => th.addEventListener('click', () => {
+    const input = $('#mgPhotoInput');
+    if (!input) return;
+    input.dataset.pid = th.dataset.photo;
+    input.click();
+  }));
+  $$('[data-rmphoto]', wrap).forEach((b) => b.addEventListener('click', async () => {
+    if (!window.confirm(t('remove_photo') + '?')) return;
+    try {
+      await api('/manage/products/' + encodeURIComponent(b.dataset.rmphoto) + '/image', { method: 'DELETE' });
+      const item = mgCatalog.items.find((x) => String(x.id) === b.dataset.rmphoto);
+      if (item) item.image_url = null;
+      paintMgCatalog();
+      toast(t('deleted'));
+    } catch (e) { toast(t('error_load')); }
+  }));
 }
 async function renderManageCoupons(body) {
   body.innerHTML = '<div class="mg-card"><h3>Coupons</h3>' +
@@ -1594,7 +1701,69 @@ async function renderManageCoupons(body) {
     '<select id="cpType" style="padding:10px;border:1.5px solid var(--line);border-radius:10px"><option value="percent">' + esc(t('percent')) + '</option><option value="fixed">' + esc(t('fixed')) + '</option></select>' +
     '<input id="cpValue" type="number" min="0" placeholder="' + esc(t('coupon_value')) + '" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;width:110px">' +
     '<button class="btn btn-primary" type="button" id="cpAddBtn">' + esc(t('add')) + '</button>' +
-    '</div><div id="cpList" style="margin-top:14px"></div></div>';
+    '</div>' +
+    '<div style="margin-top:14px;font-weight:700">' + esc(t('coupon_scope')) + '</div>' +
+    '<div style="margin-top:8px;font-size:13px;color:var(--muted)">' + esc(t('scope_brands')) + '</div>' +
+    '<div id="cpBrandChips" class="chips" style="margin-top:4px"></div>' +
+    '<div style="margin-top:10px;font-size:13px;color:var(--muted)">' + esc(t('scope_products')) + '</div>' +
+    '<div class="row-flex" style="margin-top:4px"><input id="cpProdSearch" type="search" placeholder="' + esc(t('search_products_ph')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:140px">' +
+    '<button class="btn btn-outline" type="button" id="cpProdSearchBtn">' + esc(t('search_btn')) + '</button></div>' +
+    '<div id="cpProdResults" style="margin-top:6px"></div>' +
+    '<div id="cpProdPicked" class="chips" style="margin-top:6px"></div>' +
+    '<div style="margin-top:10px;font-size:13px;color:var(--muted)">' + esc(t('scope_customers')) + '</div>' +
+    '<div class="row-flex" style="margin-top:4px"><input id="cpCustPhone" type="tel" placeholder="09…" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:140px">' +
+    '<button class="btn btn-outline" type="button" id="cpCustAddBtn">' + esc(t('add')) + '</button></div>' +
+    '<div style="margin-top:4px;font-size:12px;color:var(--muted)">' + esc(t('scope_customers_hint')) + '</div>' +
+    '<div id="cpCustPicked" class="chips" style="margin-top:6px"></div>' +
+    '<div id="cpList" style="margin-top:14px"></div></div>';
+  const selBrands = new Set();
+  const selProducts = new Map();
+  const selCustomers = new Set();
+  // Brand chips (tap to toggle).
+  try { if (!state.brands || !state.brands.length) await loadBrands(); } catch (e) { /* brands stay empty */ }
+  const brandWrap = $('#cpBrandChips');
+  const brands = (state.brands || []);
+  brandWrap.innerHTML = brands.length ? brands.map((b) =>
+    '<button type="button" class="chip" data-cpbrand="' + esc(b) + '">' + esc(b) + '</button>').join('')
+    : '<span style="color:var(--muted);font-size:13px">—</span>';
+  $$('[data-cpbrand]', brandWrap).forEach((chip) => chip.addEventListener('click', () => {
+    const b = chip.dataset.cpbrand;
+    if (selBrands.has(b)) { selBrands.delete(b); chip.classList.remove('active'); }
+    else { selBrands.add(b); chip.classList.add('active'); }
+  }));
+  const paintPicked = () => {
+    $('#cpProdPicked').innerHTML = Array.from(selProducts.entries()).map(([id, name]) =>
+      '<span class="chip active">' + esc(name) + ' <button type="button" data-unpick="' + esc(id) + '" style="border:0;background:none;color:inherit;font-size:14px;padding:0 2px">✕</button></span>').join('');
+    $$('[data-unpick]', $('#cpProdPicked')).forEach((b) => b.addEventListener('click', () => { selProducts.delete(b.dataset.unpick); paintPicked(); }));
+    $('#cpCustPicked').innerHTML = Array.from(selCustomers).map((ph) =>
+      '<span class="chip active">' + esc(ph) + ' <button type="button" data-uncust="' + esc(ph) + '" style="border:0;background:none;color:inherit;font-size:14px;padding:0 2px">✕</button></span>').join('');
+    $$('[data-uncust]', $('#cpCustPicked')).forEach((b) => b.addEventListener('click', () => { selCustomers.delete(b.dataset.uncust); paintPicked(); }));
+  };
+  const searchProducts = async () => {
+    const q = $('#cpProdSearch').value.trim();
+    const res = $('#cpProdResults');
+    if (!q) { res.innerHTML = ''; return; }
+    res.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+    try {
+      const data = await api('/manage/products?q=' + encodeURIComponent(q) + '&limit=10');
+      const items = data.items || [];
+      if (!items.length) { res.innerHTML = '<div class="empty">' + esc(t('no_products_found')) + '</div>'; return; }
+      res.innerHTML = items.map((p) => '<button type="button" class="order-card" data-pickprod="' + esc(String(p.id)) + '" data-pickname="' + esc(p.name) + '" style="text-align:left"><span>' + esc(p.name) + '</span><div class="oc-meta">' + esc(p.brand || '') + ' • ' + fmt(p.price) + '</div></button>').join('');
+      $$('[data-pickprod]', res).forEach((b) => b.addEventListener('click', () => {
+        if (!selProducts.has(b.dataset.pickprod)) selProducts.set(b.dataset.pickprod, b.dataset.pickname);
+        paintPicked();
+      }));
+    } catch (e) { res.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>'; }
+  };
+  $('#cpProdSearchBtn').addEventListener('click', searchProducts);
+  $('#cpProdSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchProducts(); });
+  $('#cpCustAddBtn').addEventListener('click', () => {
+    const ph = $('#cpCustPhone').value.trim().replace(/[\s-]/g, '');
+    if (!ph) return;
+    selCustomers.add(ph);
+    $('#cpCustPhone').value = '';
+    paintPicked();
+  });
   const load = async () => {
     const listEl = $('#cpList');
     listEl.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
@@ -1604,7 +1773,8 @@ async function renderManageCoupons(body) {
       if (!list.length) { listEl.innerHTML = '<div class="empty">' + esc(t('no_coupons')) + '</div>'; return; }
       listEl.innerHTML = list.map((c) =>
         '<div class="pay-account"><div class="pa-info"><div class="pa-method">' + esc(c.code) + '</div>' +
-        '<div class="pa-name">' + esc(c.type) + ' — ' + esc(String(c.value)) + (c.type === 'percent' ? '%' : ' Ks') + '</div></div>' +
+        '<div class="pa-name">' + esc(c.type) + ' — ' + esc(String(c.value)) + (c.type === 'percent' ? '%' : ' Ks') + '</div>' +
+        '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponScopeText(c)) + '</div></div>' +
         '<button type="button" class="btn btn-danger mini" data-delcp="' + esc(c.code) + '">' + esc(t('del')) + '</button></div>').join('');
       $$('[data-delcp]', listEl).forEach((b) => b.addEventListener('click', async () => {
         if (!window.confirm(t('confirm_delete'))) return;
@@ -1621,11 +1791,15 @@ async function renderManageCoupons(body) {
     const value = Number($('#cpValue').value);
     if (!code || !value) { toast(t('fill_all')); return; }
     try {
-      await api('/manage/coupons', { method: 'POST', body: JSON.stringify({ code: code, type: type, value: value }) });
+      await api('/manage/coupons', { method: 'POST', body: JSON.stringify({ code: code, type: type, value: value, brands: Array.from(selBrands), products: Array.from(selProducts.keys()), customers: Array.from(selCustomers) }) });
       toast(t('saved')); $('#cpCode').value = ''; $('#cpValue').value = '';
+      selBrands.clear(); selProducts.clear(); selCustomers.clear();
+      $$('[data-cpbrand]', brandWrap).forEach((ch) => ch.classList.remove('active'));
+      paintPicked();
       load();
     } catch (e) { toast(t('error_load')); }
   });
+  paintPicked();
   load();
 }
 async function renderManagePayments(body) {
