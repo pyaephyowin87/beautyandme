@@ -69,6 +69,9 @@ const I18N = {
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Import လုပ်မှာ သေချာလား?',
     qty: 'အရေအတွက်', stock_qty: 'Stock အရေအတွက်', price: 'ဈေး', sale_price: 'လျှော့ဈေး',
     filter_all: 'အကုန်', filter_in_stock: 'Stock ရှိ', filter_out_stock: 'ကုန်ပြီ', filter_sale: 'လျှော့ဈေး',
+    add_product: 'ပစ္စည်း အသစ် ထည့်မယ်', product_name: 'ပစ္စည်း နာမည်', new_brand: 'Brand အသစ်…', category: 'Category',
+    add_option: 'Option ထည့်မယ်', option_label: 'Size / Shade', product_added: 'ပစ္စည်း အသစ် ထည့်ပြီးပြီ',
+    duplicate_product: 'ဒီ နာမည်နဲ့ ပစ္စည်း ရှိပြီးသားပါ', action_product_create: 'ပစ္စည်း အသစ် ထည့်တယ်',
     is_new: 'အသစ်', sale_featured: 'Sale ★', best_seller: 'အရောင်းရဆုံး', brand: 'Brand',
     manage_no_access: 'Manage ကို Manager အကောင့်နဲ့သာ သုံးနိုင်ပါတယ်။',
     wc_warn: 'key ကို chat မှာ ဘယ်တော့မှ မပို့ပါနဲ့',
@@ -175,6 +178,9 @@ const I18N = {
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Are you sure you want to run the import?',
     qty: 'Quantity', stock_qty: 'Stock qty', price: 'Price', sale_price: 'Sale price',
     filter_all: 'All', filter_in_stock: 'In Stock', filter_out_stock: 'Sold Out', filter_sale: 'On Sale',
+    add_product: 'Add Product', product_name: 'Product name', new_brand: 'New brand…', category: 'Category',
+    add_option: 'Add option', option_label: 'Size / Shade', product_added: 'Product added',
+    duplicate_product: 'A product with this name already exists', action_product_create: 'Added a product',
     is_new: 'New', sale_featured: 'Sale ★', best_seller: 'Best seller', brand: 'Brand',
     manage_no_access: 'Manage is only available to the manager account.',
     wc_warn: 'Never send your key in chat',
@@ -1750,7 +1756,7 @@ async function loadMgUsers(reset) {
 }
 
 /* ---------------- manage: activity log (owner only) ---------------- */
-const ACTIVITY_ACTIONS = ['order_status', 'order_edit', 'order_coupon', 'password_reset', 'manager_add', 'manager_remove', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
+const ACTIVITY_ACTIONS = ['order_status', 'order_edit', 'order_coupon', 'password_reset', 'manager_add', 'manager_remove', 'product_create', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
 function activityLabel(a) { return t('action_' + a); }
 let mgActivity = { q: '', action: '', offset: 0, items: [] };
 async function renderManageActivity(body) {
@@ -1827,7 +1833,8 @@ async function renderManageCatalog(body) {
     '<div class="mg-card"><div class="row-flex">' +
     '<input id="mgSearch" type="search" placeholder="' + esc(t('search_products')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
     '<button class="btn btn-primary" type="button" id="mgSearchBtn">' + esc(t('search_btn')) + '</button>' +
-    '</div><div class="chips" style="margin-top:10px" id="mgFilterChips">' +
+    '</div><button class="btn btn-primary btn-block" type="button" id="mgAddBtn" style="margin-top:10px">+ ' + esc(t('add_product')) + '</button>' +
+    '<div class="chips" style="margin-top:10px" id="mgFilterChips">' +
     '<button type="button" class="chip active" data-mgfilter="all">' + esc(t('filter_all')) + ' <span data-mgcount="all"></span></button>' +
     '<button type="button" class="chip" data-mgfilter="in">' + esc(t('filter_in_stock')) + ' <span data-mgcount="in_stock"></span></button>' +
     '<button type="button" class="chip" data-mgfilter="out">' + esc(t('filter_out_stock')) + ' <span data-mgcount="out_stock"></span></button>' +
@@ -1843,6 +1850,7 @@ async function renderManageCatalog(body) {
   };
   $('#mgSearchBtn').addEventListener('click', doSearch);
   $('#mgSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  $('#mgAddBtn').addEventListener('click', openAddProduct);
   // Status filter: one list, one tap — and it combines with the search above
   // (e.g. ANUA + ကုန်ပြီ finds the ANUA items to restock). The reset reloads
   // from offset 0, so the list can never vanish the way it did in v15.
@@ -1892,6 +1900,98 @@ function downscaleImage(file) {
     reader.onerror = () => reject(new Error('bad_image'));
     reader.readAsDataURL(file);
   });
+}
+// Add a NEW product from Manage: name + brand + price (+ optional sale
+// price, stock, photo, and size/shade options). With options, the price
+// comes from the options and the sale-price field hides (sale prices do not
+// apply to option lines at checkout). After saving, the filter resets to
+// All so the new product is visible right away.
+async function openAddProduct() {
+  if (!state.brands || !state.brands.length) {
+    try { state.brands = await api('/brands'); } catch (e) { state.brands = []; }
+  }
+  const brandOpts = (state.brands || []).map((b) => '<option value="' + esc(b.name) + '">' + esc(b.name) + '</option>').join('');
+  $('#addProductTitle').textContent = t('add_product');
+  $('#addProductBody').innerHTML =
+    '<div class="field"><label>' + esc(t('product_name')) + ' *</label><input id="apName" type="text" placeholder="e.g. ANUA Heartleaf Toner 200 ml"></div>' +
+    '<div class="field"><label>' + esc(t('brand')) + ' *</label><select id="apBrand">' + brandOpts + '<option value="__new">' + esc(t('new_brand')) + '</option></select></div>' +
+    '<div class="field" id="apNewBrandField" hidden><label>' + esc(t('new_brand')) + '</label><input id="apNewBrand" type="text" placeholder="e.g. MEDICUBE"></div>' +
+    '<div class="field"><label>' + esc(t('category')) + '</label><input id="apCategory" type="text" placeholder="e.g. Toner"></div>' +
+    '<div class="field"><label>' + esc(t('price')) + ' (Ks) *</label><input id="apPrice" type="number" min="1" step="500" placeholder="67000"></div>' +
+    '<div class="field" id="apSaleField"><label>' + esc(t('sale_price')) + ' (Ks)</label><input id="apSale" type="number" min="0" step="500" placeholder=""></div>' +
+    '<div class="field"><label>' + esc(t('stock_qty')) + '</label><input id="apStock" type="number" min="0" step="1" placeholder="—"></div>' +
+    '<div class="field"><label>' + esc(t('add_photo')) + '</label><input id="apPhoto" type="file" accept="image/*"><div id="apPhotoPreview" style="margin-top:8px"></div></div>' +
+    '<div class="field"><label>' + esc(t('select_option')) + '</label><div id="apOptions"></div><button type="button" class="btn btn-outline" id="apAddOpt" style="margin-top:6px">+ ' + esc(t('add_option')) + '</button></div>' +
+    '<div class="error-box" id="apError" hidden></div>' +
+    '<button class="btn btn-primary btn-block" type="button" id="apSubmit">' + esc(t('add_product')) + '</button>';
+  $('#apBrand').addEventListener('change', () => { $('#apNewBrandField').hidden = $('#apBrand').value !== '__new'; });
+  const syncApSaleField = () => { $('#apSaleField').hidden = $('#apOptions').children.length > 0; };
+  const addOptRow = () => {
+    const row = document.createElement('div');
+    row.className = 'ap-opt-row';
+    row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:6px';
+    row.innerHTML =
+      '<input type="text" data-aplabel placeholder="' + esc(t('option_label')) + '" style="flex:1;min-width:0;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">' +
+      '<input type="number" min="1" step="500" data-apprice placeholder="Ks" style="width:92px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">' +
+      '<input type="number" min="0" step="1" data-apstock placeholder="—" style="width:64px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">' +
+      '<button type="button" data-aprm style="border:0;background:none;color:var(--muted);font-size:16px;padding:0 4px">✕</button>';
+    row.querySelector('[data-aprm]').addEventListener('click', () => { row.remove(); syncApSaleField(); });
+    $('#apOptions').appendChild(row);
+    syncApSaleField();
+  };
+  $('#apAddOpt').addEventListener('click', addOptRow);
+  let apPhotoData = null;
+  $('#apPhoto').addEventListener('change', async () => {
+    const f = $('#apPhoto').files && $('#apPhoto').files[0];
+    if (!f) { apPhotoData = null; $('#apPhotoPreview').innerHTML = ''; return; }
+    try {
+      apPhotoData = await downscaleImage(f);
+      $('#apPhotoPreview').innerHTML = '<img src="' + esc(apPhotoData) + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px">';
+    } catch (e) { apPhotoData = null; $('#apPhotoPreview').innerHTML = ''; }
+  });
+  $('#apSubmit').addEventListener('click', async () => {
+    const err = $('#apError'); err.hidden = true;
+    const name = $('#apName').value.trim();
+    const brandSel = $('#apBrand').value;
+    const brand = brandSel === '__new' ? $('#apNewBrand').value.trim() : brandSel;
+    const category = $('#apCategory').value.trim();
+    const price = Number($('#apPrice').value);
+    const saleRaw = $('#apSale').value.trim();
+    const stockRaw = $('#apStock').value.trim();
+    const options = $$('#apOptions .ap-opt-row').map((row) => ({
+      label: row.querySelector('[data-aplabel]').value.trim(),
+      price: Number(row.querySelector('[data-apprice]').value),
+      stock: row.querySelector('[data-apstock]').value.trim() === '' ? null : Number(row.querySelector('[data-apstock]').value),
+    }));
+    const stockVal = stockRaw === '' ? null : Number(stockRaw);
+    if (!name || !brand || (!options.length && (!price || price <= 0)) ||
+      options.some((o) => !o.label || !o.price || o.price <= 0 || (o.stock !== null && (!Number.isInteger(o.stock) || o.stock < 0))) ||
+      (stockVal !== null && (!Number.isInteger(stockVal) || stockVal < 0))) {
+      err.textContent = t('fill_all'); err.hidden = false; return;
+    }
+    const payload = {
+      name, brand, category,
+      price: options.length ? undefined : price,
+      sale_price: (options.length || saleRaw === '') ? null : Number(saleRaw),
+      stock: stockVal,
+      options: options.length ? options : undefined,
+    };
+    if (apPhotoData) payload.image_data = apPhotoData;
+    const btn = $('#apSubmit'); btn.disabled = true;
+    try {
+      await api('/manage/products', { method: 'POST', body: JSON.stringify(payload) });
+      closeOverlay('#addProductOverlay', '#addProductModal');
+      toast(t('product_added'));
+      mgCatalog.filter = 'all';
+      $$('[data-mgfilter]').forEach((x) => x.classList.toggle('active', x.dataset.mgfilter === 'all'));
+      loadMgCatalog(true);
+    } catch (e) {
+      btn.disabled = false;
+      err.textContent = (e.data && e.data.error === 'duplicate_product') ? t('duplicate_product') : t('error_load');
+      err.hidden = false;
+    }
+  });
+  openOverlay('#addProductOverlay', '#addProductModal');
 }
 async function loadMgCatalog(reset) {
   const wrap = $('#mgTableWrap');
@@ -2343,6 +2443,8 @@ function wire() {
   $('#couponListBtn').addEventListener('click', openCouponList);
   $('#couponClose').addEventListener('click', () => closeOverlay('#couponOverlay', '#couponModal'));
   $('#couponOverlay').addEventListener('click', (ev) => { if (ev.target === $('#couponOverlay')) closeOverlay('#couponOverlay', '#couponModal'); });
+  $('#addProductClose').addEventListener('click', () => closeOverlay('#addProductOverlay', '#addProductModal'));
+  $('#addProductOverlay').addEventListener('click', (ev) => { if (ev.target === $('#addProductOverlay')) closeOverlay('#addProductOverlay', '#addProductModal'); });
   $('#checkoutBtn').addEventListener('click', () => { if (state.cart.length) openCheckout(); });
   $('#playStoreBtn').addEventListener('click', () => onAppButton('play_store_url'));
   $('#appStoreBtn').addEventListener('click', () => onAppButton('app_store_url'));
