@@ -126,6 +126,7 @@ function publicProduct(p) {
     image_url: p.image_url || null,
     is_new: Boolean(p.is_new),
     best_seller: Boolean(p.best_seller),
+    sale_featured: Boolean(p.sale_featured),
     options: null,
   };
   if (p.note) out.note = p.note;
@@ -231,7 +232,11 @@ app.get('/api/products', async (req, res, next) => {
     if (type) items = items.filter((p) => deriveProductType(p) === type);
     if (section === 'best') items = items.filter((p) => p.best_seller);
     else if (section === 'new') items = items.filter((p) => p.is_new);
-    else if (section === 'sale') items = items.filter((p) => p.sale_price != null && p.sale_price < p.price);
+    else if (section === 'sale') {
+      items = items.filter((p) => p.sale_price != null && p.sale_price < p.price);
+      // Featured sale items first, the rest keep their order.
+      items.sort((a, b) => (b.sale_featured ? 1 : 0) - (a.sale_featured ? 1 : 0));
+    }
 
     const keywords = String(q).toLowerCase().split(/\s+/).filter(Boolean);
     if (keywords.length) {
@@ -591,7 +596,7 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
   try {
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
-    const { sale_price, is_new, best_seller } = req.body || {};
+    const { sale_price, is_new, best_seller, sale_featured } = req.body || {};
     if (sale_price !== undefined) {
       if (sale_price !== null && (typeof sale_price !== 'number' || sale_price < 0)) {
         return res.status(400).json({ error: 'invalid_sale_price' });
@@ -600,6 +605,7 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
     }
     if (is_new !== undefined) p.is_new = Boolean(is_new);
     if (best_seller !== undefined) p.best_seller = Boolean(best_seller);
+    if (sale_featured !== undefined) p.sale_featured = Boolean(sale_featured);
     await store.saveProduct(p);
     return res.json(p);
   } catch (err) { return next(err); }
