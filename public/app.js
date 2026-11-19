@@ -67,7 +67,7 @@ const I18N = {
     saved: 'သိမ်းပြီးပါပြီ', deleted: 'ဖျက်ပြီးပါပြီ', confirm_delete: 'ဖျက်မှာ သေချာလား?',
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Import လုပ်မှာ သေချာလား?',
     qty: 'အရေအတွက်', stock_qty: 'Stock အရေအတွက်', price: 'ဈေး', sale_price: 'လျှော့ဈေး',
-    is_new: 'အသစ်', best_seller: 'အရောင်းရဆုံး', brand: 'Brand',
+    is_new: 'အသစ်', sale_featured: 'Sale ★', best_seller: 'အရောင်းရဆုံး', brand: 'Brand',
     manage_no_access: 'Manage ကို Manager အကောင့်နဲ့သာ သုံးနိုင်ပါတယ်။',
     wc_warn: 'key ကို chat မှာ ဘယ်တော့မှ မပို့ပါနဲ့',
     wc_configured: 'WooCommerce ချိတ်ပြီးပါပြီ', wc_not_configured: 'WooCommerce မချိတ်ရသေးပါ',
@@ -147,7 +147,7 @@ const I18N = {
     saved: 'Saved', deleted: 'Deleted', confirm_delete: 'Are you sure you want to delete this?',
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Are you sure you want to run the import?',
     qty: 'Quantity', stock_qty: 'Stock qty', price: 'Price', sale_price: 'Sale price',
-    is_new: 'New', best_seller: 'Best seller', brand: 'Brand',
+    is_new: 'New', sale_featured: 'Sale ★', best_seller: 'Best seller', brand: 'Brand',
     manage_no_access: 'Manage is only available to the manager account.',
     wc_warn: 'Never send your key in chat',
     wc_configured: 'WooCommerce connected', wc_not_configured: 'WooCommerce not connected yet',
@@ -802,6 +802,14 @@ const DELIVERY = {
   outside_yangon: { fee: null, noteKey: 'fee_outside' },
   pickup: { fee: 0, noteKey: 'fee_pickup' },
 };
+function deliveryLabel(method) {
+  // Stored orders use 'outside' (server normalises 'outside_yangon');
+  // the checkout form uses 'outside_yangon' — accept both.
+  if (method === 'yangon_inner') return t('delivery_inner');
+  if (method === 'yangon_outer') return t('delivery_outer');
+  if (method === 'outside_yangon' || method === 'outside') return t('delivery_outside');
+  return t('delivery_pickup');
+}
 function lastCustomer() {
   try { return JSON.parse(localStorage.getItem('bm_last_order') || 'null'); } catch (e) { return null; }
 }
@@ -1203,6 +1211,7 @@ async function openOrderDetail(id) {
         (c.name ? '<div class="line"><span>' + esc(t('name')) + '</span><strong>' + esc(c.name) + '</strong></div>' : '') +
         (c.phone ? '<div class="line"><span>' + esc(t('phone')) + '</span><span>' + esc(c.phone) + '</span></div>' : '') +
         (c.address ? '<div class="line"><span>' + esc(t('address')) + '</span><span>' + esc(c.address) + '</span></div>' : '') : '') +
+      (o.delivery && o.delivery.method ? '<div class="line"><span>' + esc(t('delivery')) + '</span><strong>' + esc(deliveryLabel(o.delivery.method)) + '</strong></div>' : '') +
       '<hr>' +
       items.map((it) => {
         const lineTotal = it.line_total != null ? it.line_total : (it.unit_price != null ? it.unit_price : (it.price || 0)) * (it.qty || 1);
@@ -1282,13 +1291,13 @@ async function loadMgCatalog(reset) {
     mgCatalog.offset += items.length;
     $('#mgMoreBtn').style.display = (data.total != null && mgCatalog.offset < data.total) ? '' : 'none';
     if (!mgCatalog.items.length) { wrap.innerHTML = '<div class="empty">' + esc(t('empty')) + '</div>'; return; }
-    wrap.innerHTML = '<table class="mg-table"><thead><tr><th>' + esc(t('products')) + '</th><th>' + esc(t('price')) + '</th><th>' + esc(t('sale_price')) + '</th><th>' + esc(t('stock_qty')) + '</th><th>' + esc(t('is_new')) + '</th><th>' + esc(t('best_seller')) + '</th></tr></thead><tbody>' +
+    wrap.innerHTML = '<table class="mg-table"><thead><tr><th>' + esc(t('products')) + '</th><th>' + esc(t('price')) + '</th><th>' + esc(t('sale_price')) + '</th><th>' + esc(t('stock_qty')) + '</th><th>' + esc(t('sale_featured')) + '</th><th>' + esc(t('best_seller')) + '</th></tr></thead><tbody>' +
       mgCatalog.items.map((p) =>
         '<tr><td><strong>' + esc(p.name) + '</strong><br><span style="color:var(--muted);font-size:12px">' + esc(p.brand || '') + '</span></td>' +
         '<td>' + fmt(p.price) + '</td>' +
         '<td><input type="number" min="0" step="500" value="' + (p.sale_price != null ? p.sale_price : '') + '" placeholder="' + fmt(p.price) + '" data-sale="' + esc(String(p.id)) + '"></td>' +
         '<td><strong>' + esc(String(p.stock != null ? p.stock : (p.quantity != null ? p.quantity : '—'))) + '</strong></td>' +
-        '<td><button type="button" class="toggle' + (p.is_new ? ' on' : '') + '" data-tgl="is_new" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('is_new')) + '"></button></td>' +
+        '<td><button type="button" class="toggle' + (p.sale_featured ? ' on' : '') + '" data-tgl="sale_featured" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('sale_featured')) + '"></button></td>' +
         '<td><button type="button" class="toggle' + (p.best_seller ? ' on' : '') + '" data-tgl="best_seller" data-id="' + esc(String(p.id)) + '" aria-label="' + esc(t('best_seller')) + '"></button></td>' +
         '</tr>').join('') + '</tbody></table>';
     $$('[data-sale]', wrap).forEach((inp) => {
