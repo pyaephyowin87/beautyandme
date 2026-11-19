@@ -422,6 +422,21 @@ function appLinkUrl(kind) {
   if (!state.shopInfo || !state.shopInfo.app_links) return '';
   return state.shopInfo.app_links[kind] || '';
 }
+
+// Open the Beauty & Me Page chat in the Messenger APP when it is installed.
+// A plain m.me link opens messenger.com inside an in-app browser (Muse,
+// Facebook, ...) instead of the app, because those webviews do not hand
+// universal links to the app. The fb-messenger:// deep link IS handed to
+// the app by the OS even from a webview. If the app is not installed the
+// page stays visible, so after a short wait fall back to the web link.
+function openMessenger(ev) {
+  if (ev) ev.preventDefault();
+  const webUrl = (state.shopInfo && state.shopInfo.messenger_url) || 'https://m.me/beautyandme117';
+  window.location.href = 'fb-messenger://user-thread/492402784161579';
+  setTimeout(() => {
+    if (!document.hidden) window.location.href = webUrl;
+  }, 1200);
+}
 function onAppButton(kind) {
   const url = appLinkUrl(kind);
   if (url) window.open(url, '_blank', 'noopener');
@@ -2533,6 +2548,9 @@ function wire() {
   $('#checkoutBtn').addEventListener('click', () => { if (state.cart.length) openCheckout(); });
   $('#playStoreBtn').addEventListener('click', () => onAppButton('play_store_url'));
   $('#appStoreBtn').addEventListener('click', () => onAppButton('app_store_url'));
+  // Messenger links (floating button + footer): try the Messenger app first,
+  // fall back to the web link if the app is not installed.
+  ['#msgFabLink', '#messengerLink'].forEach((sel) => { const el = $(sel); if (el) el.addEventListener('click', openMessenger); });
   $$('.nav-item').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.view === 'cart') { openCart(); return; }
     closeCart();
