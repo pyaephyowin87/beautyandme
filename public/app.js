@@ -290,7 +290,6 @@ function applyI18n() {
   $('#heroTagline').textContent = t('hero_tag');
   $('#bestTitle').textContent = t('best');
   $('#saleTitle').textContent = t('sale');
-  $('#newTitle').textContent = t('new');
   $('#allTitle').textContent = t('all');
   $('#ordersTitle').textContent = t('orders_title');
   $('#accountTitle').textContent = t('account_title');
@@ -407,6 +406,7 @@ function renderChips(container) {
 function cardHTML(p) {
   const price = displayPrice(p);
   const hasSale = p.sale_price != null && p.sale_price !== '' && Number(p.sale_price) < Number(p.price);
+  const salePct = hasSale ? Math.round((1 - Number(p.sale_price) / Number(p.price)) * 100) : 0;
   const img = p.image_url
     ? '<img src="' + esc(p.image_url) + '" alt="' + esc(p.name) + '" loading="lazy">'
     : '<span class="img-placeholder">' + esc(t('no_image')) + '</span>';
@@ -416,6 +416,7 @@ function cardHTML(p) {
   const wished = isWished(p.id);
   return '<article class="card' + (p.in_stock ? '' : ' soldout') + '">' +
     '<div class="card-img-wrap"><button type="button" class="card-img" data-open="' + esc(String(p.id)) + '" aria-label="' + esc(p.name) + '">' + img + '</button>' +
+    (hasSale ? '<span class="sale-badge">−' + salePct + '%</span>' : '') +
     '<button type="button" class="wish-btn' + (wished ? ' active' : '') + '" data-wish="' + esc(String(p.id)) + '" aria-label="' + esc(t(wished ? 'wish_remove' : 'wish_add')) + '">' + (wished ? '♥' : '♡') + '</button></div>' +
     '<div class="card-body">' +
     '<span class="card-brand">' + esc(p.brand || '') + '</span>' +
@@ -568,7 +569,7 @@ function updateHomeMeta(total) {
   const parts = [total + ' ' + t('results')];
   if (state.brandFilter) parts.push(state.brandFilter);
   if (state.typeFilter) parts.push(typeLabel(state.typeFilter));
-  if (state.sectionFilter) parts.push(t(state.sectionFilter === 'best' ? 'best' : state.sectionFilter === 'sale' ? 'sale' : 'new'));
+  if (state.sectionFilter) parts.push(t(state.sectionFilter === 'best' ? 'best' : 'sale'));
   if (state.searchQuery) parts.push('“' + state.searchQuery + '”');
   meta.textContent = parts.join(' — ');
   if (clearBtn) clearBtn.hidden = false;
@@ -583,7 +584,6 @@ function clearHomeFilters() {
 async function loadHome() {
   loadSection('best', '#rowBest', null);
   loadSection('sale', '#rowSale', '#saleSectionHead');
-  loadSection('new', '#rowNew', null);
   loadHomeGrid(true);
 }
 
@@ -591,9 +591,16 @@ async function loadHome() {
 let layerZ = 100;
 const openLayers = []; // [{ov, modal}] — topmost layer is last
 function openOverlay(ov, modal) {
-  layerZ += 2;
-  $(ov).style.zIndex = layerZ;
-  $(modal).style.zIndex = layerZ + 1;
+  if (ov === '#cartOverlay') {
+    // Cart drawer stays BELOW the bottom nav (z 40) so the nav stays
+    // visible and tappable while the cart is open.
+    $(ov).style.zIndex = 35;
+    $(modal).style.zIndex = 36;
+  } else {
+    layerZ += 2;
+    $(ov).style.zIndex = layerZ;
+    $(modal).style.zIndex = layerZ + 1;
+  }
   $(ov).hidden = false; $(modal).hidden = false;
   openLayers.push({ ov, modal });
 }
@@ -645,7 +652,8 @@ function renderDetail() {
     '<div class="card-img">' + img + '</div>' +
     '<div class="detail-brand">' + esc(p.brand || '') + '</div>' +
     '<h2>' + esc(p.name) + '</h2>' +
-    '<div style="margin:8px 0"><span class="badge ' + (p.in_stock ? 'in' : 'out') + '">' + esc(p.in_stock ? t('in_stock') : t('out_stock')) + '</span></div>' +
+    '<div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="badge ' + (p.in_stock ? 'in' : 'out') + '">' + esc(p.in_stock ? t('in_stock') : t('out_stock')) + '</span>' +
+    (p.sale_price != null && p.sale_price !== '' && Number(p.sale_price) < Number(p.price) ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">−' + Math.round((1 - Number(p.sale_price) / Number(p.price)) * 100) + '% ' + esc(t('sale')) + '</span>' : '') + '</div>' +
     '<div style="margin:4px 0 10px"><button type="button" class="btn btn-outline" id="detailWishBtn"></button></div>' +
     (p.note ? '<div class="detail-note">' + esc(p.note) + '</div>' : '') +
     optsHTML;
@@ -670,8 +678,11 @@ function renderStickyBar() {
   const opt = selectedOptionObj();
   const price = opt ? optionPrice(opt) : unitPrice(p);
   const available = opt ? opt.in_stock : p.in_stock;
+  // No options + a sale price: show the original price struck through.
+  const origPrice = (!p.options || !p.options.length) && p.sale_price != null && p.sale_price !== '' && Number(p.sale_price) < Number(p.price)
+    ? Number(p.price) : null;
   bar.innerHTML =
-    '<div class="sb-price"><div class="amt">' + fmt(price) + '</div>' +
+    '<div class="sb-price"><div class="amt">' + (origPrice ? '<span class="was">' + fmt(origPrice) + '</span>' : '') + fmt(price) + '</div>' +
     '<div class="st"><span class="badge ' + (available ? 'in' : 'out') + '">' + esc(available ? t('in_stock') : t('out_stock')) + '</span></div></div>' +
     '<div class="qty-stepper"><button type="button" id="qtyMinus" aria-label="−">−</button><span id="qtyVal">' + state.detailQty + '</span><button type="button" id="qtyPlus" aria-label="+">+</button></div>' +
     '<button type="button" class="btn btn-primary" id="detailAdd"' + (available ? '' : ' disabled') + '>' + esc(t('add_cart')) + '</button>';
@@ -1106,8 +1117,8 @@ function renderAccount() {
   const u = state.user;
   body.innerHTML =
     '<div class="checkout-card">' +
-    '<div class="line"><span>' + esc(t('name')) + '</span><strong>' + esc(u.name || '') + '</strong></div>' +
-    '<div class="line"><span>' + esc(t('phone')) + '</span><span>' + esc(u.phone || '') + '</span></div>' +
+    '<div class="kv-row"><span>' + esc(t('name')) + '</span><strong>' + esc(u.name || '') + '</strong></div>' +
+    '<div class="kv-row"><span>' + esc(t('phone')) + '</span><strong>' + esc(u.phone || '') + '</strong></div>' +
     '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">' +
     '<button class="btn btn-outline" type="button" id="accountOrdersBtn">' + esc(t('my_orders')) + '</button>' +
     '<button class="btn btn-outline" type="button" id="accountLogoutBtn">' + esc(t('logout')) + '</button>' +
@@ -1543,6 +1554,7 @@ function wire() {
   $('#appStoreBtn').addEventListener('click', () => onAppButton('app_store_url'));
   $$('.nav-item').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.view === 'cart') { openCart(); return; }
+    closeCart();
     if (b.dataset.view === 'checkout') { openCheckout(); return; }
     showView(b.dataset.view);
   }));

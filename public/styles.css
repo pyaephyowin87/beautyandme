@@ -102,7 +102,7 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
 .card-brand{font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--purple);text-transform:uppercase}
 .card-name{font-size:15px;font-weight:600;line-height:1.35;min-height:40px}
 .card-price{font-weight:800;font-size:16px;color:var(--pink)}
-.card-price .was{font-size:13px;color:var(--muted);font-weight:500;text-decoration:line-through;margin-right:6px}
+.was{font-size:13px;color:var(--muted);font-weight:500;text-decoration:line-through;margin-right:6px}
 .badge{display:inline-block;align-self:flex-start;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px}
 .badge.in{background:#E2F5E9;color:var(--green)}
 .badge.out{background:#EFEDEE;color:var(--grey)}
@@ -145,6 +145,13 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
   display:flex; align-items:center; justify-content:center; z-index:2;
 }
 .wish-btn.active{background:var(--pink); border-color:var(--pink); color:#fff}
+.sale-badge{
+  position:absolute; top:8px; left:8px; z-index:2;
+  background:var(--pink); color:#fff; font-size:12px; font-weight:800;
+  padding:4px 8px; border-radius:999px;
+}
+.kv-row{display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:15px}
+.kv-row span{color:var(--muted)}
 
 /* ---------- Footer ---------- */
 .app-footer{
@@ -159,6 +166,10 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
 .overlay{
   position:fixed; inset:0; background:rgba(43,34,48,.45); z-index:50;
 }
+/* Cart drawer sits BELOW the bottom nav (z 40) so the nav stays visible
+   and tappable while the cart is open; other modals still cover the nav. */
+#cartOverlay{z-index:35}
+#cartDrawer{z-index:36; bottom:calc(62px + env(safe-area-inset-bottom))}
 .drawer{
   position:fixed; top:0; right:0; bottom:0; width:min(420px,92vw); z-index:51;
   background:#fff; display:flex; flex-direction:column; box-shadow:-4px 0 24px rgba(0,0,0,.2);
