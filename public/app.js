@@ -501,10 +501,10 @@ function cardHTML(p) {
     ? '<img src="' + esc(p.image_url) + '" alt="' + esc(p.name) + '" loading="lazy">'
     : '<span class="img-placeholder">' + esc(t('no_image')) + '</span>';
   const priceHTML = hasOpts
-    ? fmt(optionPrice(selOpt))
+    ? '<span class="price-now">' + fmt(optionPrice(selOpt)) + '</span>'
     : (hasSale
-      ? '<span class="was">' + fmt(p.price) + '</span>' + fmt(p.sale_price)
-      : fmt(price));
+      ? '<span class="was">' + fmt(p.price) + '</span><span class="price-now">' + fmt(p.sale_price) + '</span>'
+      : '<span class="price-now">' + fmt(price) + '</span>');
   const wished = isWished(p.id);
   return '<article class="card' + (p.in_stock ? '' : ' soldout') + '">' +
     '<div class="card-img-wrap"><button type="button" class="card-img" data-open="' + esc(String(p.id)) + '" aria-label="' + esc(p.name) + '">' + img + '</button>' +
@@ -525,7 +525,7 @@ function applyCardOption(card, pid, label, price) {
   state.cardOpt[pid] = label;
   if (card) {
     const pe = card.querySelector('[data-cardprice]');
-    if (pe) pe.textContent = fmt(price);
+    if (pe) pe.innerHTML = '<span class="price-now">' + fmt(price) + '</span>';
     $$('.chip', card).forEach((c) => c.classList.toggle('active', c.dataset.label === label));
   }
 }
