@@ -145,6 +145,8 @@ const state = {
   coupon: JSON.parse(localStorage.getItem('bm_coupon') || 'null'),
   brands: [],
   brandFilter: '',
+  types: [],
+  typeFilter: '',
   searchQuery: '',
   shopInfo: null,
   payments: null,
@@ -295,6 +297,41 @@ function onAppButton(kind) {
   else toast(t('coming_soon'));
 }
 
+/* ---------------- product types ---------------- */
+async function loadTypes() {
+  try {
+    state.types = await api('/types');
+  } catch (e) { state.types = []; }
+  renderTypeChips($('#typeChips'), true);
+  renderTypeChips($('#shopTypeChips'), false);
+}
+function typeLabel(t) {
+  const e = (state.types || []).find((x) => x.type === t);
+  return e ? e.label : t;
+}
+function renderTypeChips(container, isHome) {
+  if (!container) return;
+  const all = [{ type: '', label: t('all'), count: null }];
+  const list = all.concat(state.types || []);
+  container.innerHTML = list.map((x) => {
+    const active = state.typeFilter === x.type;
+    return '<button type="button" class="chip' + (active ? ' active' : '') + '" data-type="' + esc(x.type) + '">' +
+      esc(x.label) + (x.count != null ? ' (' + x.count + ')' : '') + '</button>';
+  }).join('');
+  $$('.chip', container).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.typeFilter = btn.dataset.type;
+      state.shopOffset = 0;
+      state.homeOffset = 0;
+      renderTypeChips($('#typeChips'), true);
+      renderTypeChips($('#shopTypeChips'), false);
+      if (isHome) { loadHomeGrid(true); }
+      showView('shop');
+      loadShopGrid(true);
+    });
+  });
+}
+
 /* ---------------- brands ---------------- */
 async function loadBrands() {
   try {
@@ -397,6 +434,7 @@ async function loadHomeGrid(reset) {
   if (reset) grid.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   const params = new URLSearchParams({ limit: String(PAGE), offset: String(state.homeOffset) });
   if (state.brandFilter) params.set('brand', state.brandFilter);
+  if (state.typeFilter) params.set('type', state.typeFilter);
   if (state.searchQuery) params.set('q', state.searchQuery);
   try {
     const data = await api('/products?' + params.toString());
@@ -429,6 +467,7 @@ async function loadShopGrid(reset) {
   if (reset) grid.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   const params = new URLSearchParams({ limit: String(PAGE), offset: String(state.shopOffset) });
   if (state.brandFilter) params.set('brand', state.brandFilter);
+  if (state.typeFilter) params.set('type', state.typeFilter);
   if (state.searchQuery) params.set('q', state.searchQuery);
   try {
     const data = await api('/products?' + params.toString());
@@ -445,6 +484,7 @@ async function loadShopGrid(reset) {
     const total = data.total != null ? data.total : items.length;
     $('#shopMeta').textContent = total + ' ' + t('results') +
       (state.brandFilter ? ' — ' + state.brandFilter : '') +
+      (state.typeFilter ? ' — ' + typeLabel(state.typeFilter) : '') +
       (state.searchQuery ? ' — “' + state.searchQuery + '”' : '');
   } catch (e) {
     if (reset) grid.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
@@ -1231,7 +1271,7 @@ async function renderManageWoo(body) {
       const r = await api('/manage/woocommerce/import-data', { method: 'POST', body: JSON.stringify({ matched: lastWooPreview.matched }) });
       $('#wooMsg').textContent = t('saved');
       $('#wooResult').innerHTML = '<pre style="white-space:pre-wrap;font-size:13px">' + esc(JSON.stringify(r, null, 2)) + '</pre>';
-      loadBrands(); loadHomeGrid(true);
+      loadBrands(); loadTypes(); loadHomeGrid(true);
     } catch (e) { $('#wooMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
   });
 }
@@ -1245,6 +1285,8 @@ function wire() {
     applyI18n();
     renderChips($('#brandChips'), true);
     renderChips($('#shopBrandChips'), false);
+    renderTypeChips($('#typeChips'), true);
+    renderTypeChips($('#shopTypeChips'), false);
     loadHomeGrid(true);
     if (!$('#view-shop').hidden) loadShopGrid(true);
   });
@@ -1274,8 +1316,11 @@ function wire() {
   $$('#manageTabs .tab').forEach((b) => b.addEventListener('click', () => loadManage(b.dataset.mtab)));
   $$('[data-viewall]').forEach((b) => b.addEventListener('click', () => {
     state.brandFilter = '';
+    state.typeFilter = '';
     state.searchQuery = '';
     $('#searchInput').value = '';
+    renderTypeChips($('#typeChips'), true);
+    renderTypeChips($('#shopTypeChips'), false);
     showView('shop');
     loadShopGrid(true);
   }));
@@ -1307,6 +1352,7 @@ async function init() {
   await restoreSession();
   await loadShopInfo();
   await loadBrands();
+  await loadTypes();
   loadHome();
 }
 document.addEventListener('DOMContentLoaded', init);
