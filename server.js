@@ -64,8 +64,8 @@ function newToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function publicUser(user) {
-  return { id: user.id, name: user.name, phone: user.phone, is_manager: user.phone === MANAGER_PHONE };
+async function publicUser(user) {
+  return { id: user.id, name: user.name, phone: user.phone, is_manager: await isManagerPhone(user.phone) };
 }
 
 // Product type, derived from the product name. The POS category field is
@@ -196,7 +196,25 @@ async function authMiddleware(req, res, next) {
   return next();
 }
 
+// Extra managers (beyond the owner) live in settings key 'managers' — a list
+// of phone numbers. Only the owner (MANAGER_PHONE) can add or remove them.
+async function isManagerPhone(phone) {
+  const p = normalizePhone(phone);
+  if (p === MANAGER_PHONE) return true;
+  const extra = (await store.getSetting('managers')) || [];
+  return Array.isArray(extra) && extra.includes(p);
+}
+
+const ORDER_STATUSES = ['pending', 'confirmed', 'delivering', 'delivered', 'cancelled'];
+
 function managerMiddleware(req, res, next) {
+  return isManagerPhone(req.user && req.user.phone).then((ok) => {
+    if (!ok) return res.status(403).json({ error: 'forbidden' });
+    return next();
+  }).catch(next);
+}
+
+function ownerMiddleware(req, res, next) {
   if (!req.user || req.user.phone !== MANAGER_PHONE) {
     return res.status(403).json({ error: 'forbidden' });
   }
@@ -314,7 +332,7 @@ app.post('/api/auth/register', async (req, res, next) => {
       created_at: new Date().toISOString(),
     };
     await store.saveUser(user);
-    return res.json({ token, user: publicUser(user) });
+    return res.json({ token, user: await publicUser(user) });
   } catch (err) { return next(err); }
 });
 
@@ -329,11 +347,11 @@ app.post('/api/auth/login', async (req, res, next) => {
     user.token = newToken();
     user.token_expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     await store.saveUser(user);
-    return res.json({ token: user.token, user: publicUser(user) });
+    return res.json({ token: user.token, user: await publicUser(user) });
   } catch (err) { return next(err); }
 });
 
-app.get('/api/me', authMiddleware, (req, res) => res.json({ user: publicUser(req.user) }));
+app.get('/api/me', authMiddleware, async (req, res) => res.json({ user: await publicUser(req.user) }));
 
 app.post('/api/auth/change-password', authMiddleware, async (req, res, next) => {
   try {
@@ -521,7 +539,8 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
 app.get('/api/orders', authMiddleware, async (req, res, next) => {
   try {
     const all = await store.listOrders();
-    const mine = req.user.phone === MANAGER_PHONE
+    const isMgr = await isManagerPhone(req.user.phone);
+    const mine = isMgr
       ? all
       : all.filter((o) => o.user_id === req.user.id || (o.customer && o.customer.phone === req.user.phone));
     mine.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -539,7 +558,7 @@ app.get('/api/orders/:id', authMiddleware, async (req, res, next) => {
   try {
     const order = await store.getOrder(req.params.id);
     if (!order) return res.status(404).json({ error: 'order_not_found' });
-    const isManager = req.user.phone === MANAGER_PHONE;
+    const isManager = await isManagerPhone(req.user.phone);
     const isOwner = order.user_id === req.user.id
       || (order.customer && order.customer.phone === req.user.phone);
     if (!isManager && !isOwner) return res.status(403).json({ error: 'forbidden' });
@@ -571,6 +590,168 @@ app.get('/api/manage/stats', authMiddleware, managerMiddleware, async (_req, res
     ]);
     const revenue = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
     return res.json({ products: products.length, orders: orders.length, users: users.length, revenue });
+  } catch (err) { return next(err); }
+});
+
+// ---------- Manage: Orders (all orders, newest first) ----------
+
+function adminOrderShape(o) {
+  const { screenshot_path, ...rest } = o;
+  return { ...rest, has_screenshot: Boolean(screenshot_path) };
+}
+
+app.get('/api/manage/orders', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const { q = '', status = '' } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    let orders = await store.listOrders();
+    orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    if (status && ORDER_STATUSES.includes(status)) orders = orders.filter((o) => o.status === status);
+    if (q) {
+      const needle = String(q).toLowerCase();
+      orders = orders.filter((o) =>
+        String(o.id || '').toLowerCase().includes(needle) ||
+        String((o.customer && o.customer.name) || '').toLowerCase().includes(needle) ||
+        String((o.customer && o.customer.phone) || '').includes(needle));
+    }
+    const total = orders.length;
+    return res.json({ orders: orders.slice(offset, offset + limit).map(adminOrderShape), total });
+  } catch (err) { return next(err); }
+});
+
+app.get('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const order = await store.getOrder(req.params.id);
+    if (!order) return res.status(404).json({ error: 'order_not_found' });
+    return res.json({ order: adminOrderShape(order) });
+  } catch (err) { return next(err); }
+});
+
+app.patch('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const order = await store.getOrder(req.params.id);
+    if (!order) return res.status(404).json({ error: 'order_not_found' });
+    const { status } = req.body || {};
+    if (!ORDER_STATUSES.includes(status)) return res.status(400).json({ error: 'invalid_status' });
+    order.status = status;
+    order.updated_at = new Date().toISOString();
+    await store.saveOrder(order);
+    return res.json({ order: adminOrderShape(order) });
+  } catch (err) { return next(err); }
+});
+
+// Payment screenshot — manager only, streamed from the file this order
+// recorded. Never listed in any customer response.
+app.get('/api/manage/orders/:id/screenshot', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const order = await store.getOrder(req.params.id);
+    if (!order || !order.screenshot_path) return res.status(404).json({ error: 'screenshot_not_found' });
+    const file = path.join(store.uploadsDir, `${order.id}.jpg`);
+    if (!fs.existsSync(file)) return res.status(404).json({ error: 'screenshot_not_found' });
+    res.setHeader('Content-Type', 'image/jpeg');
+    return res.sendFile(file);
+  } catch (err) { return next(err); }
+});
+
+// ---------- Manage: Users ----------
+
+app.get('/api/manage/users', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const { q = '' } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const extraManagers = (await store.getSetting('managers')) || [];
+    const [users, orders] = await Promise.all([store.listUsers(), store.listOrders()]);
+    const orderCount = {};
+    for (const o of orders) {
+      const key = (o.customer && o.customer.phone) || o.user_phone || '';
+      if (key) orderCount[key] = (orderCount[key] || 0) + 1;
+    }
+    let list = users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      phone: u.phone,
+      is_owner: u.phone === MANAGER_PHONE,
+      is_manager: u.phone === MANAGER_PHONE || (Array.isArray(extraManagers) && extraManagers.includes(u.phone)),
+      orders_count: orderCount[u.phone] || 0,
+      created_at: u.created_at || null,
+    }));
+    list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    if (q) {
+      const needle = String(q).toLowerCase();
+      list = list.filter((u) =>
+        String(u.name || '').toLowerCase().includes(needle) ||
+        String(u.phone || '').includes(needle));
+    }
+    const total = list.length;
+    return res.json({ users: list.slice(offset, offset + limit), total });
+  } catch (err) { return next(err); }
+});
+
+// Admin resets a customer's password (e.g. they forgot it) and tells them the
+// new one by Messenger/phone — the shop has no SMS/email. The customer's
+// login is cleared, so they sign in again with the new password. A manager
+// can never reset another manager's (or the owner's) password — only the
+// owner can do that.
+app.patch('/api/manage/users/:phone/password', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const phone = normalizePhone(req.params.phone);
+    const user = await store.getUserByPhone(phone);
+    if (!user) return res.status(404).json({ error: 'user_not_found' });
+    const targetIsManager = await isManagerPhone(phone);
+    if (targetIsManager && req.user.phone !== MANAGER_PHONE) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const { password } = req.body || {};
+    if (!password || String(password).length < 4) return res.status(400).json({ error: 'password_too_short' });
+    user.password_hash = hashPassword(String(password));
+    user.token = null;
+    user.token_expires_at = null;
+    await store.saveUser(user);
+    return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
+// ---------- Manage: Managers (owner only) ----------
+
+app.get('/api/manage/managers', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try {
+    const extra = (await store.getSetting('managers')) || [];
+    const users = await store.listUsers();
+    const byPhone = new Map(users.map((u) => [u.phone, u]));
+    return res.json({
+      owner: MANAGER_PHONE,
+      managers: (Array.isArray(extra) ? extra : []).map((phone) => ({
+        phone,
+        name: (byPhone.get(phone) || {}).name || '',
+      })),
+    });
+  } catch (err) { return next(err); }
+});
+
+app.post('/api/manage/managers', authMiddleware, ownerMiddleware, async (req, res, next) => {
+  try {
+    const phone = normalizePhone((req.body || {}).phone);
+    if (!isValidMyanmarPhone(phone)) return res.status(400).json({ error: 'invalid_phone' });
+    if (phone === MANAGER_PHONE) return res.status(400).json({ error: 'already_owner' });
+    const user = await store.getUserByPhone(phone);
+    if (!user) return res.status(404).json({ error: 'user_not_found' });
+    const extra = (await store.getSetting('managers')) || [];
+    if (Array.isArray(extra) && !extra.includes(phone)) {
+      extra.push(phone);
+      await store.setSetting('managers', extra);
+    }
+    return res.status(201).json({ ok: true, phone });
+  } catch (err) { return next(err); }
+});
+
+app.delete('/api/manage/managers/:phone', authMiddleware, ownerMiddleware, async (req, res, next) => {
+  try {
+    const phone = normalizePhone(req.params.phone);
+    const extra = (await store.getSetting('managers')) || [];
+    await store.setSetting('managers', (Array.isArray(extra) ? extra : []).filter((p) => p !== phone));
+    return res.json({ ok: true });
   } catch (err) { return next(err); }
 });
 
