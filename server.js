@@ -366,24 +366,92 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res, next) => 
   } catch (err) { return next(err); }
 });
 
+// ---------- Coupon scoping ----------
+// A coupon may be limited to certain brands, certain products, and/or
+// certain customers (by phone). An empty/missing scope list = applies to all.
+function couponItemEligible(coupon, product) {
+  if (!coupon || !product) return false;
+  if (Array.isArray(coupon.brands) && coupon.brands.length && !coupon.brands.includes(product.brand)) return false;
+  if (Array.isArray(coupon.products) && coupon.products.length && !coupon.products.includes(product.id)) return false;
+  return true;
+}
+function couponCustomerEligible(coupon, phone) {
+  if (!coupon) return false;
+  if (Array.isArray(coupon.customers) && coupon.customers.length) {
+    return coupon.customers.includes(normalizePhone(phone || ''));
+  }
+  return true;
+}
+// Discount is computed on the ELIGIBLE items only, never on the whole order.
+// items: [{unit_price, qty, product}]
+function couponDiscountFor(coupon, items) {
+  const base = (items || []).filter((it) => couponItemEligible(coupon, it.product))
+    .reduce((a, it) => a + it.unit_price * it.qty, 0);
+  if (base <= 0) return { discount: 0, base: 0 };
+  let d = 0;
+  if (coupon.type === 'percent') d = Math.round((base * Number(coupon.value)) / 100);
+  else d = Math.min(Number(coupon.value) || 0, base);
+  return { discount: d, base };
+}
+// Attach resolved product names to coupons (for display only).
+async function withCouponProductNames(list) {
+  for (const c of list || []) {
+    c.product_names = [];
+    if (Array.isArray(c.products) && c.products.length) {
+      for (const pid of c.products) {
+        const pr = await store.getProduct(pid);
+        if (pr) c.product_names.push(pr.name);
+      }
+    }
+  }
+  return list;
+}
+
 // Public coupon list — only active coupons, only what a customer needs
 // to pick one (code + value). Private/expired coupons never appear here.
+// Customer phone lists are NEVER sent to customers — only a flag.
 app.get('/api/coupons', async (_req, res, next) => {
   try {
     const all = await store.listCoupons();
     const active = all.filter((c) => c && c.active !== false).map((c) => ({
       code: c.code, type: c.type || 'percent', value: c.value,
+      brands: Array.isArray(c.brands) ? c.brands : [],
+      products: Array.isArray(c.products) ? c.products : [],
+      customers_only: Array.isArray(c.customers) && c.customers.length > 0,
     }));
+    await withCouponProductNames(active);
     return res.json(active);
   } catch (err) { return next(err); }
 });
 
 app.post('/api/coupons/validate', async (req, res, next) => {
   try {
-    const { code } = req.body || {};
+    const { code, items, phone } = req.body || {};
     const coupon = await store.getCoupon(code);
-    if (!coupon || coupon.active === false) return res.json({ valid: false });
-    return res.json({ valid: true, code: coupon.code, type: coupon.type || 'percent', value: coupon.value });
+    if (!coupon || coupon.active === false) return res.json({ valid: false, reason: 'not_found' });
+    if (!couponCustomerEligible(coupon, phone)) return res.json({ valid: false, reason: 'not_for_customer' });
+    const scoped = (Array.isArray(coupon.brands) && coupon.brands.length > 0)
+      || (Array.isArray(coupon.products) && coupon.products.length > 0);
+    // Resolve the cart against server-side products/prices. Never trust
+    // client prices — the same math runs again when the order is placed.
+    const resolved = [];
+    if (Array.isArray(items)) {
+      for (const it of items) {
+        const product = await store.getProduct(it.product_id);
+        if (!product) continue;
+        const unitPrice = product.sale_price != null && product.sale_price < product.price
+          ? product.sale_price : product.price;
+        resolved.push({ unit_price: unitPrice, qty: Math.max(1, Number(it.qty) || 1), product });
+      }
+    }
+    if (scoped) {
+      if (!resolved.length) return res.json({ valid: false, reason: 'no_eligible_items' });
+      const { discount, base } = couponDiscountFor(coupon, resolved);
+      if (base <= 0) return res.json({ valid: false, reason: 'no_eligible_items' });
+      return res.json({ valid: true, code: coupon.code, type: coupon.type || 'percent', value: coupon.value, discount, eligible_total: base, brands: coupon.brands || [], products: coupon.products || [] });
+    }
+    const { discount, base } = couponDiscountFor(coupon, resolved);
+    return res.json({ valid: true, code: coupon.code, type: coupon.type || 'percent', value: coupon.value, discount, eligible_total: base, brands: [], products: [] });
   } catch (err) { return next(err); }
 });
 
@@ -440,6 +508,7 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     const products = await store.listProducts();
     const byId = new Map(products.map((p) => [p.id, p]));
     const orderItems = [];
+    const loadedProducts = [];
     let subtotal = 0;
     for (const it of items) {
       const product = byId.get(it.product_id);
@@ -461,6 +530,7 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
       }
       const lineTotal = unitPrice * qty;
       subtotal += lineTotal;
+      loadedProducts.push(product);
       orderItems.push({
         product_id: product.id,
         product_name: product.name,
@@ -471,13 +541,17 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
       });
     }
 
-    // Coupon: percent off subtotal.
+    // Coupon: discount is computed on the ELIGIBLE items only (a scoped
+    // coupon never discounts the whole order). Customer scope is checked
+    // again here — the checkout validate step is not trusted on its own.
     let discount = 0;
     let coupon = null;
     if (coupon_code) {
       coupon = await store.getCoupon(coupon_code);
       if (!coupon || coupon.active === false) return res.status(400).json({ error: 'invalid_coupon' });
-      if (coupon.type === 'percent') discount = Math.round((subtotal * Number(coupon.value)) / 100);
+      if (!couponCustomerEligible(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
+      const calcItems = orderItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
+      discount = couponDiscountFor(coupon, calcItems).discount;
       discount = Math.min(discount, subtotal);
     }
 
@@ -792,15 +866,56 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
   } catch (err) { return next(err); }
 });
 
+// Product photo upload (manager only). Body {image_data} is a data URL —
+// the frontend downscales to max 800px JPEG first, so uploads stay small.
+// Stored on the product (Postgres), so it survives redeploys, and WC import
+// never overwrites it (import only fills products that have no image yet).
+app.post('/api/manage/products/:id/image', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const p = await store.getProduct(req.params.id);
+    if (!p) return res.status(404).json({ error: 'product_not_found' });
+    const { image_data } = req.body || {};
+    if (typeof image_data !== 'string') return res.status(400).json({ error: 'image_required' });
+    const m = image_data.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+    if (!m) return res.status(400).json({ error: 'invalid_image' });
+    const buf = Buffer.from(m[2], 'base64');
+    if (buf.length > 1500 * 1024) return res.status(400).json({ error: 'image_too_large' });
+    p.image_url = image_data;
+    await store.saveProduct(p);
+    return res.json({ ok: true, image_url: p.image_url });
+  } catch (err) { return next(err); }
+});
+
+app.delete('/api/manage/products/:id/image', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const p = await store.getProduct(req.params.id);
+    if (!p) return res.status(404).json({ error: 'product_not_found' });
+    p.image_url = null;
+    await store.saveProduct(p);
+    return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
 app.get('/api/manage/coupons', authMiddleware, managerMiddleware, async (_req, res, next) => {
-  try { return res.json(await store.listCoupons()); } catch (err) { return next(err); }
+  try {
+    const list = await store.listCoupons();
+    await withCouponProductNames(list);
+    return res.json(list);
+  } catch (err) { return next(err); }
 });
 
 app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
-    const { code, type = 'percent', value, note = '', active = true } = req.body || {};
+    const { code, type = 'percent', value, note = '', active = true, brands, products, customers } = req.body || {};
     if (!code || typeof value !== 'number') return res.status(400).json({ error: 'code_and_value_required' });
-    const coupon = { code: String(code).toUpperCase(), type, value, note, active: Boolean(active) };
+    const cleanArr = (v) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []);
+    const coupon = {
+      code: String(code).toUpperCase(), type, value, note, active: Boolean(active),
+      brands: cleanArr(brands),
+      products: cleanArr(products),
+      // Customer scope is stored as normalised phones; invalid ones are dropped.
+      customers: cleanArr(customers).map((p) => normalizePhone(p)).filter((p) => isValidMyanmarPhone(p)),
+    };
     await store.saveCoupon(coupon);
     return res.status(201).json(coupon);
   } catch (err) { return next(err); }
