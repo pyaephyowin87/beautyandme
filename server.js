@@ -330,6 +330,31 @@ app.post('/api/auth/login', async (req, res, next) => {
 
 app.get('/api/me', authMiddleware, (req, res) => res.json({ user: publicUser(req.user) }));
 
+app.post('/api/auth/change-password', authMiddleware, async (req, res, next) => {
+  try {
+    const { current_password, new_password } = req.body || {};
+    if (!new_password || String(new_password).length < 4) return res.status(400).json({ error: 'password_too_short' });
+    if (!verifyPassword(String(current_password || ''), req.user.password_hash)) {
+      return res.status(401).json({ error: 'invalid_credentials' });
+    }
+    req.user.password_hash = hashPassword(String(new_password));
+    await store.saveUser(req.user);
+    return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
+// Public coupon list — only active coupons, only what a customer needs
+// to pick one (code + value). Private/expired coupons never appear here.
+app.get('/api/coupons', async (_req, res, next) => {
+  try {
+    const all = await store.listCoupons();
+    const active = all.filter((c) => c && c.active !== false).map((c) => ({
+      code: c.code, type: c.type || 'percent', value: c.value,
+    }));
+    return res.json(active);
+  } catch (err) { return next(err); }
+});
+
 app.post('/api/coupons/validate', async (req, res, next) => {
   try {
     const { code } = req.body || {};
