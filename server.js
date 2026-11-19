@@ -836,6 +836,50 @@ app.patch('/api/manage/orders/:id/items', authMiddleware, managerMiddleware, asy
   } catch (err) { return next(err); }
 });
 
+// Admin applies or removes a coupon on an order (e.g. the customer forgot
+// to apply one at checkout). Same lock as item editing: not delivered /
+// cancelled. The coupon is validated like at checkout — must exist, be
+// active, and the customer must be eligible; a scoped coupon with no
+// eligible items in this order is refused. Discount is recomputed on the
+// order's current items; delivery fee is unchanged.
+app.patch('/api/manage/orders/:id/coupon', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const order = await store.getOrder(req.params.id);
+    if (!order) return res.status(404).json({ error: 'order_not_found' });
+    if (order.status === 'delivered' || order.status === 'cancelled') {
+      return res.status(400).json({ error: 'order_locked' });
+    }
+    const code = (req.body || {}).coupon_code ? String((req.body || {}).coupon_code).toUpperCase().trim() : '';
+    const oldTotal = order.total;
+    if (!code) {
+      if (!order.coupon_code) return res.json({ order: adminOrderShape(order), old_total: oldTotal, new_total: oldTotal });
+      order.coupon_code = null;
+      order.discount = 0;
+      order.total = order.subtotal;
+      order.updated_at = new Date().toISOString();
+      await store.saveOrder(order);
+      await logActivity(req, 'order_coupon', 'order', order.id, `coupon removed — total: ${oldTotal} → ${order.total} Ks`);
+      return res.json({ order: adminOrderShape(order), old_total: oldTotal, new_total: order.total });
+    }
+    const coupon = await store.getCoupon(code);
+    if (!coupon || coupon.active === false) return res.status(400).json({ error: 'invalid_coupon' });
+    const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
+    if (!couponCustomerEligible(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
+    const products = await store.listProducts();
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const calcItems = (order.items || []).map((oi) => ({ unit_price: oi.unit_price, qty: oi.qty, product: byId.get(oi.product_id) }));
+    const discount = couponDiscountFor(coupon, calcItems).discount;
+    if (discount <= 0) return res.status(400).json({ error: 'no_eligible_items' });
+    order.coupon_code = coupon.code;
+    order.discount = discount;
+    order.total = order.subtotal - discount;
+    order.updated_at = new Date().toISOString();
+    await store.saveOrder(order);
+    await logActivity(req, 'order_coupon', 'order', order.id, `coupon ${coupon.code} applied — discount ${discount} Ks, total: ${oldTotal} → ${order.total} Ks`);
+    return res.json({ order: adminOrderShape(order), old_total: oldTotal, new_total: order.total });
+  } catch (err) { return next(err); }
+});
+
 // Activity log — owner only. Newest first; ?q searches who/what, ?action filters by kind.
 app.get('/api/manage/activity', authMiddleware, ownerMiddleware, async (req, res, next) => {
   try {
