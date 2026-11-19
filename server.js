@@ -65,7 +65,7 @@ function newToken() {
 }
 
 async function publicUser(user) {
-  return { id: user.id, name: user.name, phone: user.phone, is_manager: await isManagerPhone(user.phone), is_owner: user.phone === MANAGER_PHONE };
+  return { id: user.id, name: user.name, phone: user.phone, is_manager: await isManagerPhone(user.phone), is_sale_staff: await isSaleStaffPhone(user.phone), is_owner: user.phone === MANAGER_PHONE };
 }
 
 // Product type, derived from the product name. The POS category field is
@@ -214,6 +214,27 @@ const ORDER_STATUSES = ['pending', 'confirmed', 'delivering', 'delivered', 'canc
 
 function managerMiddleware(req, res, next) {
   return isManagerPhone(req.user && req.user.phone).then((ok) => {
+    if (!ok) return res.status(403).json({ error: 'forbidden' });
+    return next();
+  }).catch(next);
+}
+
+// Sale staff (below manager): order work only — view orders, edit items /
+// coupon, change status. They see nothing else in Manage. Like managers,
+// they live in a settings list ('sale_staff') and only the owner adds/removes.
+async function isSaleStaffPhone(phone) {
+  const p = normalizePhone(phone);
+  if (p === MANAGER_PHONE) return false;
+  const extra = (await store.getSetting('sale_staff')) || [];
+  return Array.isArray(extra) && extra.includes(p);
+}
+
+async function isOrderStaffPhone(phone) {
+  return (await isManagerPhone(phone)) || (await isSaleStaffPhone(phone));
+}
+
+function orderStaffMiddleware(req, res, next) {
+  return isOrderStaffPhone(req.user && req.user.phone).then((ok) => {
     if (!ok) return res.status(403).json({ error: 'forbidden' });
     return next();
   }).catch(next);
@@ -686,6 +707,8 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     order.stock_adjusted = stockTouched > 0;
     for (const p of [...new Set(loadedProducts)]) await store.saveProduct(p);
     await store.saveOrder(order);
+    // First entry in this voucher's history: who placed it, for how much.
+    await logActivity({ user: { phone: custPhone, name: String(customer.name).trim() } }, 'order_create', 'order', orderId, `order placed — ${order.total} Ks (${orderItems.length} item${orderItems.length > 1 ? 's' : ''})`);
 
     const { screenshot_path: _sp, ...rest } = order;
     void _sp;
@@ -757,7 +780,7 @@ function adminOrderShape(o) {
   return { ...rest, has_screenshot: Boolean(screenshot_path) };
 }
 
-app.get('/api/manage/orders', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.get('/api/manage/orders', authMiddleware, orderStaffMiddleware, async (req, res, next) => {
   try {
     const { q = '', status = '' } = req.query;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
@@ -777,7 +800,7 @@ app.get('/api/manage/orders', authMiddleware, managerMiddleware, async (req, res
   } catch (err) { return next(err); }
 });
 
-app.get('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.get('/api/manage/orders/:id', authMiddleware, orderStaffMiddleware, async (req, res, next) => {
   try {
     const order = await store.getOrder(req.params.id);
     if (!order) return res.status(404).json({ error: 'order_not_found' });
@@ -785,7 +808,7 @@ app.get('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (req,
   } catch (err) { return next(err); }
 });
 
-app.patch('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.patch('/api/manage/orders/:id', authMiddleware, orderStaffMiddleware, async (req, res, next) => {
   try {
     const order = await store.getOrder(req.params.id);
     if (!order) return res.status(404).json({ error: 'order_not_found' });
@@ -830,7 +853,7 @@ app.patch('/api/manage/orders/:id', authMiddleware, managerMiddleware, async (re
 // selling from real shop stock. Orders placed before stock control existed
 // (no stock_adjusted flag) leave stock untouched. Delivery fee is unchanged.
 // Total is recomputed; the coupon (if any) is re-applied to the new items.
-app.patch('/api/manage/orders/:id/items', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.patch('/api/manage/orders/:id/items', authMiddleware, orderStaffMiddleware, async (req, res, next) => {
   try {
     const order = await store.getOrder(req.params.id);
     if (!order) return res.status(404).json({ error: 'order_not_found' });
@@ -947,7 +970,7 @@ app.patch('/api/manage/orders/:id/items', authMiddleware, managerMiddleware, asy
 // active, and the customer must be eligible; a scoped coupon with no
 // eligible items in this order is refused. Discount is recomputed on the
 // order's current items; delivery fee is unchanged.
-app.patch('/api/manage/orders/:id/coupon', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.patch('/api/manage/orders/:id/coupon', authMiddleware, orderStaffMiddleware, async (req, res, next) => {
   try {
     const order = await store.getOrder(req.params.id);
     if (!order) return res.status(404).json({ error: 'order_not_found' });
@@ -999,7 +1022,7 @@ app.get('/api/manage/activity', authMiddleware, ownerMiddleware, async (req, res
 // (screenshots are stored there since 2026-11-19); falls back to the old
 // disk file for orders placed before that change. Never listed in any
 // customer response.
-app.get('/api/manage/orders/:id/screenshot', authMiddleware, managerMiddleware, async (req, res, next) => {
+app.get('/api/manage/orders/:id/screenshot', authMiddleware, orderStaffMiddleware, async (req, res, next) => {
   try {
     const order = await store.getOrder(req.params.id);
     if (!order || !order.screenshot_path) return res.status(404).json({ error: 'screenshot_not_found' });
@@ -1028,6 +1051,7 @@ app.get('/api/manage/users', authMiddleware, managerMiddleware, async (req, res,
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const extraManagers = (await store.getSetting('managers')) || [];
+    const extraStaff = (await store.getSetting('sale_staff')) || [];
     const [users, orders] = await Promise.all([store.listUsers(), store.listOrders()]);
     const orderCount = {};
     for (const o of orders) {
@@ -1040,6 +1064,7 @@ app.get('/api/manage/users', authMiddleware, managerMiddleware, async (req, res,
       phone: u.phone,
       is_owner: u.phone === MANAGER_PHONE,
       is_manager: u.phone === MANAGER_PHONE || (Array.isArray(extraManagers) && extraManagers.includes(u.phone)),
+      is_sale_staff: Array.isArray(extraStaff) && extraStaff.includes(u.phone),
       orders_count: orderCount[u.phone] || 0,
       created_at: u.created_at || null,
     }));
@@ -1110,6 +1135,11 @@ app.post('/api/manage/managers', authMiddleware, ownerMiddleware, async (req, re
       extra.push(phone);
       await store.setSetting('managers', extra);
     }
+    // Promoting to manager replaces the lower sale-staff role.
+    const staff = (await store.getSetting('sale_staff')) || [];
+    if (Array.isArray(staff) && staff.includes(phone)) {
+      await store.setSetting('sale_staff', staff.filter((p) => p !== phone));
+    }
     await logActivity(req, 'manager_add', 'user', phone, `manager added: ${user.name || phone}`);
     return res.status(201).json({ ok: true, phone });
   } catch (err) { return next(err); }
@@ -1121,6 +1151,50 @@ app.delete('/api/manage/managers/:phone', authMiddleware, ownerMiddleware, async
     const extra = (await store.getSetting('managers')) || [];
     await store.setSetting('managers', (Array.isArray(extra) ? extra : []).filter((p) => p !== phone));
     await logActivity(req, 'manager_remove', 'user', phone, `manager removed: ${phone}`);
+    return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
+// Sale staff (order work only) — same shape as managers, owner only.
+// A manager already has full order access, so they cannot also be staff.
+app.get('/api/manage/sale-staff', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try {
+    const extra = (await store.getSetting('sale_staff')) || [];
+    const users = await store.listUsers();
+    const byPhone = new Map(users.map((u) => [u.phone, u]));
+    return res.json({
+      staff: (Array.isArray(extra) ? extra : []).map((phone) => ({
+        phone,
+        name: (byPhone.get(phone) || {}).name || '',
+      })),
+    });
+  } catch (err) { return next(err); }
+});
+
+app.post('/api/manage/sale-staff', authMiddleware, ownerMiddleware, async (req, res, next) => {
+  try {
+    const phone = normalizePhone((req.body || {}).phone);
+    if (!isValidMyanmarPhone(phone)) return res.status(400).json({ error: 'invalid_phone' });
+    if (phone === MANAGER_PHONE) return res.status(400).json({ error: 'already_owner' });
+    if (await isManagerPhone(phone)) return res.status(400).json({ error: 'already_manager' });
+    const user = await store.getUserByPhone(phone);
+    if (!user) return res.status(404).json({ error: 'user_not_found' });
+    const extra = (await store.getSetting('sale_staff')) || [];
+    if (Array.isArray(extra) && !extra.includes(phone)) {
+      extra.push(phone);
+      await store.setSetting('sale_staff', extra);
+    }
+    await logActivity(req, 'staff_add', 'user', phone, `sale staff added: ${user.name || phone}`);
+    return res.status(201).json({ ok: true, phone });
+  } catch (err) { return next(err); }
+});
+
+app.delete('/api/manage/sale-staff/:phone', authMiddleware, ownerMiddleware, async (req, res, next) => {
+  try {
+    const phone = normalizePhone(req.params.phone);
+    const extra = (await store.getSetting('sale_staff')) || [];
+    await store.setSetting('sale_staff', (Array.isArray(extra) ? extra : []).filter((p) => p !== phone));
+    await logActivity(req, 'staff_remove', 'user', phone, `sale staff removed: ${phone}`);
     return res.json({ ok: true });
   } catch (err) { return next(err); }
 });
