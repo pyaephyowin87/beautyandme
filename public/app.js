@@ -95,7 +95,8 @@ const I18N = {
     owner_only: 'Owner (095117366) ပဲ လုပ်နိုင်ပါတယ်', no_users: 'User မရှိသေးပါ',
     pw_reset_hint: 'ချိန်းပြီးရင် customer ကို Messenger / ဖုန်း နဲ့ password အသစ်ကို ပြောပေးပါ — customer က အသစ်နဲ့ ပြန်ဝင်ရမယ်',
     activity: 'လုပ်ဆောင်ချက် မှတ်တမ်း', search_activity: 'ရှာမယ် (လူ / order / ပစ္စည်း)…', all_actions: 'လုပ်ဆောင်ချက် အားလုံး', no_activity: 'မှတ်တမ်း မရှိသေးပါ',
-    action_order_status: 'Order status ပြောင်းတယ်', action_password_reset: 'Password ချိန်းပေးတယ်', action_manager_add: 'Manager ထည့်တယ်', action_manager_remove: 'Manager ဖြုတ်တယ်', action_product_update: 'ပစ္စည်း ပြင်တယ်', action_product_photo_add: 'ပစ္စည်း ပုံ ထည့်တယ်', action_product_photo_remove: 'ပစ္စည်း ပုံ ဖျက်တယ်', action_coupon_create: 'Coupon လုပ်တယ်', action_coupon_delete: 'Coupon ဖျက်တယ်', action_payments_update: 'Payment အကောင့် ပြင်တယ်', action_app_links_update: 'App link ပြင်တယ်', action_woocommerce_settings: 'WooCommerce setting ပြင်တယ်', action_woocommerce_import: 'WooCommerce ပုံ တင်တယ်',
+    action_order_status: 'Order status ပြောင်းတယ်', action_password_reset: 'Password ချိန်းပေးတယ်', action_manager_add: 'Manager ထည့်တယ်', action_manager_remove: 'Manager ဖြုတ်တယ်', action_product_update: 'ပစ္စည်း ပြင်တယ်', action_product_photo_add: 'ပစ္စည်း ပုံ ထည့်တယ်', action_product_photo_remove: 'ပစ္စည်း ပုံ ဖျက်တယ်', action_coupon_create: 'Coupon လုပ်တယ်', action_coupon_delete: 'Coupon ဖျက်တယ်', action_payments_update: 'Payment အကောင့် ပြင်တယ်', action_app_links_update: 'App link ပြင်တယ်', action_woocommerce_settings: 'WooCommerce setting ပြင်တယ်', action_woocommerce_import: 'WooCommerce ပုံ တင်တယ်', action_order_edit: 'Order ပစ္စည်း ပြင်တယ်',
+    edit_items: 'ပစ္စည်း ပြင်မယ်', save_changes: 'သိမ်းမယ်', cancel: 'မလုပ်တော့ဘူး', no_items: 'ပစ္စည်း မရှိသေးပါ', order_locked: 'ပို့ပြီးသား / ပယ်ဖျက်ထားတဲ့ order ကို ပြင်လို့မရပါ', total_changed: 'Total ပြောင်းသွားတယ်', total_diff_hint: 'customer လွှဲထားတဲ့ ငွေ ကွာရင် Messenger နဲ့ ပြောပေးပါ',
     manager_hint: 'ဝန်ထမ်းက ဆိုင်မှာ အရင် register လုပ်ထားရမယ် (နာမည် + ဖုန်း) — ပြီးမှ ဒီမှာ ဖုန်းနံပါတ် ရိုက်ပြီး Add လုပ်ပါ',
     add_photo: 'ပုံထည့်မယ်', change_photo: 'ပုံပြောင်းမယ်', remove_photo: 'ပုံဖျက်မယ်',
     coupon_scope: 'Coupon သက်ရောက်မယ့် အရာ (မရွေးရင် ပစ္စည်းအားလုံးအတွက်)',
@@ -197,7 +198,8 @@ const I18N = {
     owner_only: 'Only the owner (095117366) can do this', no_users: 'No users yet',
     pw_reset_hint: 'After changing, tell the customer the new password by Messenger / phone — they will sign in again with it',
     activity: 'Activity log', search_activity: 'Search (person / order / product)…', all_actions: 'All actions', no_activity: 'No activity yet',
-    action_order_status: 'Changed order status', action_password_reset: 'Reset a password', action_manager_add: 'Added a manager', action_manager_remove: 'Removed a manager', action_product_update: 'Edited a product', action_product_photo_add: 'Added a product photo', action_product_photo_remove: 'Removed a product photo', action_coupon_create: 'Created a coupon', action_coupon_delete: 'Deleted a coupon', action_payments_update: 'Edited payment accounts', action_app_links_update: 'Edited app links', action_woocommerce_settings: 'Edited WooCommerce settings', action_woocommerce_import: 'Imported WooCommerce photos',
+    action_order_status: 'Changed order status', action_password_reset: 'Reset a password', action_manager_add: 'Added a manager', action_manager_remove: 'Removed a manager', action_product_update: 'Edited a product', action_product_photo_add: 'Added a product photo', action_product_photo_remove: 'Removed a product photo', action_coupon_create: 'Created a coupon', action_coupon_delete: 'Deleted a coupon', action_payments_update: 'Edited payment accounts', action_app_links_update: 'Edited app links', action_woocommerce_settings: 'Edited WooCommerce settings', action_woocommerce_import: 'Imported WooCommerce photos', action_order_edit: 'Edited order items',
+    edit_items: 'Edit items', save_changes: 'Save changes', cancel: 'Cancel', no_items: 'No items yet', order_locked: 'A delivered or cancelled order cannot be edited', total_changed: 'Total changed', total_diff_hint: 'If the customer already transferred, tell them the difference by Messenger',
     manager_hint: 'Staff must register in the shop first (name + phone) — then type their phone here and tap Add',
     add_photo: 'Add photo', change_photo: 'Change photo', remove_photo: 'Remove photo',
     coupon_scope: 'What this coupon applies to (leave empty = all products)',
@@ -1396,6 +1398,7 @@ async function openAdminOrder(id) {
         const lineTotal = it.line_total != null ? it.line_total : (it.unit_price != null ? it.unit_price : (it.price || 0)) * (it.qty || 1);
         return '<div class="line"><span>' + esc(it.product_name || it.name || it.product_id) + (it.option_label ? ' (' + esc(it.option_label) + ')' : '') + ' × ' + (it.qty || 1) + '</span><span>' + fmt(lineTotal) + '</span></div>';
       }).join('') +
+      (o.status !== 'delivered' && o.status !== 'cancelled' ? '<div style="margin-top:10px"><button type="button" class="btn btn-outline btn-block" id="adminEditItemsBtn">✏️ ' + esc(t('edit_items')) + '</button></div>' : '') +
       '<hr>' +
       '<div class="line"><span>' + esc(t('subtotal')) + '</span><span>' + fmt(o.subtotal) + '</span></div>' +
       (o.discount ? '<div class="line"><span>' + esc(t('discount')) + '</span><span>−' + fmt(o.discount) + '</span></div>' : '') +
@@ -1408,6 +1411,8 @@ async function openAdminOrder(id) {
       '<div class="row-flex" style="flex-wrap:wrap">' + ORDER_STATUSES.map((s) =>
         '<button type="button" class="btn ' + (o.status === s ? 'btn-primary' : 'btn-outline') + '" data-mgstatus="' + s + '">' + esc(statusLabel(s)) + '</button>').join('') + '</div>';
     if (o.has_screenshot) loadAdminScreenshot(o.id);
+    const editBtn = $('#adminEditItemsBtn');
+    if (editBtn) editBtn.addEventListener('click', () => renderAdminOrderEdit(o));
     $$('[data-mgstatus]').forEach((btn) => btn.addEventListener('click', async () => {
       try {
         const res = await api('/manage/orders/' + encodeURIComponent(o.id), { method: 'PATCH', body: JSON.stringify({ status: btn.dataset.mgstatus }) });
@@ -1424,6 +1429,96 @@ async function openAdminOrder(id) {
   } catch (e) {
     $('#orderBody').innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
   }
+}
+/* Admin edits an order's items: qty −/+, remove, add by search.
+   Prices shown are the order's snapshot prices; a newly added line is
+   priced at the current catalog price. Total is recomputed server-side. */
+function renderAdminOrderEdit(o) {
+  const editItems = (o.items || []).map((it) => ({ ...it }));
+  const body = $('#orderBody');
+  const paint = () => {
+    const subtotal = editItems.reduce((a, it) => a + (it.unit_price || 0) * (it.qty || 1), 0);
+    body.innerHTML =
+      '<div class="line"><span>' + esc(t('order_id')) + '</span><strong>' + esc(o.id) + '</strong></div>' +
+      '<div style="font-weight:700;margin:10px 0 8px">' + esc(t('edit_items')) + '</div>' +
+      '<div id="adminEditRows">' + editItems.map((it, i) =>
+        '<div class="order-card" style="margin-bottom:8px"><div class="kv-row"><span>' + esc(it.product_name || it.name || it.product_id) + (it.option_label ? ' (' + esc(it.option_label) + ')' : '') + '</span><span>' + fmt((it.unit_price || 0) * (it.qty || 1)) + '</span></div>' +
+        '<div class="row-flex" style="margin-top:8px"><button type="button" class="btn btn-outline mini" data-eqty="-1" data-ei="' + i + '">−</button>' +
+        '<span style="min-width:28px;text-align:center;font-weight:700">' + (it.qty || 1) + '</span>' +
+        '<button type="button" class="btn btn-outline mini" data-eqty="1" data-ei="' + i + '">+</button>' +
+        '<span style="color:var(--muted);font-size:12px">' + fmt(it.unit_price || 0) + ' Ks</span>' +
+        '<button type="button" class="btn btn-danger mini" data-erem="' + i + '" style="margin-left:auto">✕</button></div></div>').join('') + '</div>' +
+      (editItems.length ? '' : '<div class="empty">' + esc(t('no_items')) + '</div>') +
+      '<div class="row-flex" style="margin-top:10px"><input id="adminAddSearch" type="search" placeholder="' + esc(t('search_products_ph')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:140px">' +
+      '<button class="btn btn-outline" type="button" id="adminAddSearchBtn">' + esc(t('search_btn')) + '</button></div>' +
+      '<div id="adminAddResults" style="margin-top:6px"></div>' +
+      '<div class="line" style="margin-top:12px"><strong>' + esc(t('subtotal')) + '</strong><strong>' + fmt(subtotal) + '</strong></div>' +
+      '<div class="row-flex" style="margin-top:12px"><button type="button" class="btn btn-primary" id="adminEditSave" style="flex:1">' + esc(t('save_changes')) + '</button>' +
+      '<button type="button" class="btn btn-outline" id="adminEditCancel">' + esc(t('cancel')) + '</button></div>' +
+      '<div id="adminEditNote" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>';
+    $$('[data-eqty]', body).forEach((b) => b.addEventListener('click', () => {
+      const it = editItems[Number(b.dataset.ei)];
+      if (!it) return;
+      it.qty = Math.max(1, Math.min(99, (it.qty || 1) + Number(b.dataset.eqty)));
+      paint();
+    }));
+    $$('[data-erem]', body).forEach((b) => b.addEventListener('click', () => {
+      editItems.splice(Number(b.dataset.erem), 1);
+      paint();
+    }));
+    const doAddSearch = async () => {
+      const q = $('#adminAddSearch').value.trim();
+      const res = $('#adminAddResults');
+      if (!q) { res.innerHTML = ''; return; }
+      res.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+      try {
+        const data = await api('/manage/products?q=' + encodeURIComponent(q) + '&limit=10');
+        const items = data.items || [];
+        if (!items.length) { res.innerHTML = '<div class="empty">' + esc(t('no_products_found')) + '</div>'; return; }
+        res.innerHTML = items.map((p) => '<button type="button" class="order-card" data-addprod="' + esc(String(p.id)) + '" style="text-align:left"><span>' + esc(p.name) + '</span><div class="oc-meta">' + esc(p.brand || '') + ' • ' + fmt(p.price) + '</div>' +
+          (Array.isArray(p.options) && p.options.length ? '<div style="margin-top:6px">' + p.options.map((op) => '<span class="chip" data-addopt="' + esc(String(p.id)) + '" data-optlabel="' + esc(op.label) + '" style="cursor:pointer">' + esc(op.label) + ' — ' + fmt(op.price) + '</span>').join(' ') + '</div>' : '') + '</button>').join('');
+        $$('[data-addprod]', res).forEach((b) => b.addEventListener('click', () => {
+          const prod = items.find((x) => String(x.id) === b.dataset.addprod);
+          if (!prod || (Array.isArray(prod.options) && prod.options.length)) return; // option products use their option chips
+          const unit = (prod.sale_price != null && prod.sale_price < prod.price) ? prod.sale_price : prod.price;
+          editItems.push({ product_id: prod.id, product_name: prod.name, option_label: null, qty: 1, unit_price: unit, line_total: unit });
+          paint();
+        }));
+        $$('[data-addopt]', res).forEach((ch) => ch.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const prod = items.find((x) => String(x.id) === ch.dataset.addopt);
+          const opt = prod && (prod.options || []).find((x) => x.label === ch.dataset.optlabel);
+          if (!prod || !opt) return;
+          editItems.push({ product_id: prod.id, product_name: prod.name, option_label: opt.label, qty: 1, unit_price: opt.price, line_total: opt.price });
+          paint();
+        }));
+      } catch (e) { res.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>'; }
+    };
+    $('#adminAddSearchBtn').addEventListener('click', doAddSearch);
+    $('#adminAddSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doAddSearch(); });
+    $('#adminEditCancel').addEventListener('click', () => openAdminOrder(o.id));
+    $('#adminEditSave').addEventListener('click', async () => {
+      if (!editItems.length) { toast(t('no_items')); return; }
+      const note = $('#adminEditNote');
+      try {
+        const res = await api('/manage/orders/' + encodeURIComponent(o.id) + '/items', { method: 'PATCH', body: JSON.stringify({ items: editItems.map((it) => ({ product_id: it.product_id, qty: it.qty, option_label: it.option_label || undefined })) }) });
+        const diff = res.new_total - res.old_total;
+        loadMgOrders(true);
+        await openAdminOrder(o.id);
+        const nb = $('#orderBody');
+        if (nb && diff !== 0) {
+          const diffText = (diff > 0 ? '+' : '') + fmt(diff) + ' Ks';
+          const warn = (o.payment && o.payment.method === 'transfer') ? ' — ' + esc(t('total_diff_hint')) : '';
+          nb.insertAdjacentHTML('afterbegin', '<div class="mg-card" style="background:#FDE7F0;margin-bottom:10px"><strong>' + esc(t('total_changed')) + ':</strong> ' + fmt(res.old_total) + ' → ' + fmt(res.new_total) + ' Ks (' + diffText + ')' + warn + '</div>');
+        }
+        toast(t('saved'));
+      } catch (e) {
+        if (note) note.textContent = t(e && e.message === 'order_locked' ? 'order_locked' : 'error_load');
+        else toast(t('error_load'));
+      }
+    });
+  };
+  paint();
 }
 async function loadAdminScreenshot(orderId) {
   try {
@@ -1564,7 +1659,7 @@ async function loadMgUsers(reset) {
 }
 
 /* ---------------- manage: activity log (owner only) ---------------- */
-const ACTIVITY_ACTIONS = ['order_status', 'password_reset', 'manager_add', 'manager_remove', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
+const ACTIVITY_ACTIONS = ['order_status', 'order_edit', 'password_reset', 'manager_add', 'manager_remove', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
 function activityLabel(a) { return t('action_' + a); }
 let mgActivity = { q: '', action: '', offset: 0, items: [] };
 async function renderManageActivity(body) {
@@ -1830,7 +1925,7 @@ async function renderManageCoupons(body) {
   const brandWrap = $('#cpBrandChips');
   const brands = (state.brands || []);
   brandWrap.innerHTML = brands.length ? brands.map((b) =>
-    '<button type="button" class="chip" data-cpbrand="' + esc(b) + '">' + esc(b) + '</button>').join('')
+    '<button type="button" class="chip" data-cpbrand="' + esc(b.name) + '">' + esc(b.name) + '</button>').join('')
     : '<span style="color:var(--muted);font-size:13px">—</span>';
   $$('[data-cpbrand]', brandWrap).forEach((chip) => chip.addEventListener('click', () => {
     const b = chip.dataset.cpbrand;
