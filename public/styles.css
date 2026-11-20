@@ -26,10 +26,14 @@ h1,h2,h3{margin:0}
 
 /* ---------- Header ---------- */
 .app-header{
-  position:sticky; top:0; z-index:40;
+  position:sticky; top:0; z-index:30;
   background:var(--card); border-bottom:1px solid var(--line);
   padding:10px 12px 12px;
 }
+/* Header z-index must stay BELOW the cart overlay (35) / drawer (36):
+   at 40 it painted over the open cart and hid the cart title, the close
+   button and the first item's photo + name on mobile. Still above page
+   content, and still below the bottom nav (40) and all modals (50+). */
 .header-row{display:flex;align-items:center;justify-content:space-between;gap:8px;max-width:1024px;margin:0 auto}
 .logo-btn{background:none;border:none;padding:0;display:flex;align-items:center;gap:8px}
 .logo-img{height:44px;width:auto;border-radius:10px}
