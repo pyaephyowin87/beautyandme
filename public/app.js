@@ -85,6 +85,18 @@ const I18N = {
     new_key: 'အသစ် key (ပြောင်းချင်မှ ဖြည့်ပါ)', new_secret: 'အသစ် secret (ပြောင်းချင်မှ ဖြည့်ပါ)',
     site_url: 'Site URL', consumer_key: 'Consumer Key', consumer_secret: 'Consumer Secret',
     matched: 'ကိုက်ညီသော ပစ္စည်း', pos_only: 'POS မှာသာ ရှိသော ပစ္စည်း', wc_only: 'WooCommerce မှာသာ ရှိသော ပစ္စည်း',
+    mig_title: 'ပုံတွေ ဆိုင်ထဲ ရွှေ့မယ်',
+    mig_intro: 'အခု ပုံတွေက အဟောင်း website မှာ ရှိနေတယ် — အဟောင်း site ကျသွားရင် ပုံတွေ မပေါ်ဘူး။ ဒီမှာ ရွှေ့လိုက်ရင် ပုံတွေ ဆိုင်ကိုယ်ပိုင် ဖြစ်သွားမယ်။',
+    mig_status: 'WP ပုံ', mig_moved: 'ရွှေ့ပြီး', mig_noimg: 'ပုံမရှိ',
+    mig_check: 'စစ်မယ်', mig_check_ok: 'ရတယ် — browser ကနေ ပုံဆွဲလို့ရတယ်။ အောက်က "ရွှေ့မယ်" နှိပ်ပါ။',
+    mig_check_fail: 'browser ကနေ တိုက်ရိုက်ဆွဲမရဘူး — အောက်က ZIP နည်းနဲ့ ရွှေ့ပါ။',
+    mig_move: 'ရွှေ့မယ်', mig_stop: 'ရပ်မယ်', mig_moving: 'ရွှေ့နေတယ်…',
+    mig_done: 'ပြီးပါပြီ', mig_failed: 'မရတဲ့ ပုံများ',
+    mig_zip_title: 'ZIP နဲ့ ရွှေ့မယ်',
+    mig_zip_hint: 'WP admin ကနေ wp-content/uploads folder ကို ZIP နဲ့ ဒေါင်းပြီး ဒီမှာ တင်ပါ။',
+    mig_zip_btn: 'ZIP တင်ပြီး ရွှေ့မယ်',
+    mig_zip_done: 'ZIP ကနေ ရွှေ့ပြီးပါပြီ',
+    action_image_migrate: 'ပုံတွေ ဆိုင်ထဲ ရွှေ့တယ်',
     products: 'ပစ္စည်းများ', orders: 'အော်ဒါများ', sales: 'ရောင်းအား', customers: 'ဝယ်သူများ',
     fill_all: 'အချက်အလက် အကုန် ဖြည့်ပါ', invalid_phone: 'ဖုန်း နံပါတ် မမှန်ပါ',
     coupon_code: 'Coupon code', coupon_type: 'အမျိုးအစား', coupon_value: 'တန်ဖိုး',
@@ -198,6 +210,18 @@ const I18N = {
     new_key: 'New key (only if changing)', new_secret: 'New secret (only if changing)',
     site_url: 'Site URL', consumer_key: 'Consumer Key', consumer_secret: 'Consumer Secret',
     matched: 'Matched products', pos_only: 'POS-only products', wc_only: 'WooCommerce-only products',
+    mig_title: 'Move photos into the shop',
+    mig_intro: 'Photos still live on the old website — if the old site goes down, the photos break. Move them here and they belong to the shop.',
+    mig_status: 'WP photos', mig_moved: 'Moved', mig_noimg: 'No photo',
+    mig_check: 'Check', mig_check_ok: 'Works — this browser can fetch the photos. Tap "Move" below.',
+    mig_check_fail: 'This browser cannot fetch them directly — use the ZIP method below.',
+    mig_move: 'Move', mig_stop: 'Stop', mig_moving: 'Moving…',
+    mig_done: 'Done', mig_failed: 'Photos that failed',
+    mig_zip_title: 'Move with a ZIP',
+    mig_zip_hint: 'Download the wp-content/uploads folder as a ZIP from WP admin and upload it here.',
+    mig_zip_btn: 'Upload ZIP and move',
+    mig_zip_done: 'Moved from ZIP',
+    action_image_migrate: 'Moved photos into the shop',
     products: 'Products', orders: 'Orders', sales: 'Sales', customers: 'Customers',
     fill_all: 'Please fill in all fields', invalid_phone: 'Invalid phone number',
     coupon_code: 'Coupon code', coupon_type: 'Type', coupon_value: 'Value',
@@ -1870,7 +1894,7 @@ async function loadMgUsers(reset) {
 }
 
 /* ---------------- manage: activity log (owner only) ---------------- */
-const ACTIVITY_ACTIONS = ['order_create', 'order_status', 'order_edit', 'order_coupon', 'password_reset', 'manager_add', 'manager_remove', 'staff_add', 'staff_remove', 'product_create', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import'];
+const ACTIVITY_ACTIONS = ['order_create', 'order_status', 'order_edit', 'order_coupon', 'password_reset', 'manager_add', 'manager_remove', 'staff_add', 'staff_remove', 'product_create', 'product_update', 'product_photo_add', 'product_photo_remove', 'coupon_create', 'coupon_delete', 'payments_update', 'app_links_update', 'woocommerce_settings', 'woocommerce_import', 'image_migrate'];
 function activityLabel(a) { return t('action_' + a); }
 let mgActivity = { q: '', action: '', offset: 0, items: [] };
 async function renderManageActivity(body) {
@@ -2502,7 +2526,27 @@ async function renderManageWoo(body) {
     '<button class="btn btn-outline" type="button" id="wooPreview">' + esc(t('preview')) + '</button>' +
     '<button class="btn btn-outline" type="button" id="wooImport">' + esc(t('import')) + '</button>' +
     '</div><div id="wooMsg" class="meta-line" style="margin-top:10px"></div>' +
-    '<div id="wooResult"></div></div>';
+    '<div id="wooResult"></div></div>' +
+    // Move WooCommerce photos into this shop (fix-batch-20): the photos
+    // still point at the old WordPress site, so they break whenever that
+    // site is slow or down. Browser route fetches each photo from here
+    // (Myanmar is allowed in); ZIP route is the fallback if WordPress
+    // does not allow cross-origin reads.
+    '<div class="mg-card"><h3>' + esc(t('mig_title')) + '</h3>' +
+    '<div class="meta-line">' + esc(t('mig_intro')) + '</div>' +
+    '<div id="migStatus" class="meta-line">' + esc(t('loading')) + '</div>' +
+    '<div class="row-flex">' +
+    '<button class="btn btn-outline" type="button" id="migCheck">' + esc(t('mig_check')) + '</button>' +
+    '<button class="btn btn-primary" type="button" id="migMove" disabled>' + esc(t('mig_move')) + '</button>' +
+    '<button class="btn btn-outline" type="button" id="migStop" hidden>' + esc(t('mig_stop')) + '</button>' +
+    '</div><div id="migMsg" class="meta-line" style="margin-top:10px"></div>' +
+    '<div id="migProgress" class="meta-line"></div>' +
+    '<div id="migFails" style="margin-top:8px"></div>' +
+    '<h4 style="margin-top:14px">' + esc(t('mig_zip_title')) + '</h4>' +
+    '<div class="meta-line">' + esc(t('mig_zip_hint')) + '</div>' +
+    '<div class="field"><input id="migZip" type="file" accept=".zip,application/zip"></div>' +
+    '<button class="btn btn-outline" type="button" id="migZipBtn">' + esc(t('mig_zip_btn')) + '</button>' +
+    '<div id="migZipMsg" class="meta-line" style="margin-top:10px"></div></div>';
   $$('[data-eye]').forEach((b) => b.addEventListener('click', () => {
     const inp = $('#' + b.dataset.eye);
     inp.type = inp.type === 'password' ? 'text' : 'password';
@@ -2600,6 +2644,76 @@ async function renderManageWoo(body) {
       $('#wooResult').innerHTML = '<pre style="white-space:pre-wrap;font-size:13px">' + esc(JSON.stringify(r, null, 2)) + '</pre>';
       loadBrands(); loadTypes(); loadHomeGrid(true);
     } catch (e) { $('#wooMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
+  });
+
+  // --- Move photos into the shop ---
+  let migList = null;
+  let migStop = false;
+  async function loadMigStatus() {
+    try {
+      migList = await api('/manage/migrate-images/list');
+      $('#migStatus').textContent = t('mig_status') + ': ' + migList.external + ' · ' + t('mig_moved') + ': ' + migList.migrated + ' · ' + t('mig_noimg') + ': ' + migList.no_image;
+    } catch (e) { $('#migStatus').textContent = t('error_load'); }
+  }
+  await loadMigStatus();
+  $('#migCheck').addEventListener('click', async () => {
+    $('#migMsg').textContent = t('loading');
+    try {
+      if (!migList || !migList.items.length) { $('#migMsg').textContent = t('mig_done'); return; }
+      const probe = migList.items[0].image_url;
+      const res = await fetch(probe, { mode: 'cors' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const ct = res.headers.get('content-type') || '';
+      if (ct.indexOf('image/') !== 0) throw new Error('not an image');
+      $('#migMsg').textContent = t('mig_check_ok');
+      $('#migMove').disabled = false;
+    } catch (e) { $('#migMsg').textContent = t('mig_check_fail'); }
+  });
+  $('#migMove').addEventListener('click', async () => {
+    if (!migList || !migList.items.length) return;
+    migStop = false;
+    $('#migMove').disabled = true; $('#migStop').hidden = false;
+    $('#migFails').innerHTML = '';
+    let done = 0;
+    let failed = 0;
+    const failedNames = [];
+    for (const item of migList.items) {
+      if (migStop) break;
+      $('#migProgress').textContent = t('mig_moving') + ' ' + (done + failed + 1) + ' / ' + migList.items.length;
+      try {
+        const res = await fetch(item.image_url, { mode: 'cors' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const blob = await res.blob();
+        const dataUrl = await downscaleImage(blob);
+        await api('/manage/products/' + item.id + '/image', { method: 'POST', body: JSON.stringify({ image_data: dataUrl, migrate: true }) });
+        done++;
+      } catch (e) { failed++; failedNames.push(item.name); }
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    try { await api('/manage/migrate-images/summary', { method: 'POST', body: JSON.stringify({ migrated: done, failed: failed, failed_names: failedNames }) }); } catch (e) {}
+    $('#migProgress').textContent = '';
+    $('#migMsg').textContent = t('mig_done') + ' — ' + t('mig_moved') + ': ' + done + (failed ? ' · ' + t('mig_failed') + ': ' + failed : '');
+    if (failedNames.length) $('#migFails').innerHTML = '<div class="error-box">' + failedNames.map((n) => esc(n)).join('<br>') + '</div>';
+    $('#migStop').hidden = true;
+    await loadMigStatus();
+    loadBrands(); loadTypes(); loadHomeGrid(true);
+  });
+  $('#migStop').addEventListener('click', () => { migStop = true; });
+  $('#migZipBtn').addEventListener('click', async () => {
+    const f = $('#migZip').files[0];
+    if (!f) { $('#migZipMsg').textContent = t('fill_all'); return; }
+    $('#migZipMsg').textContent = t('loading');
+    try {
+      const res = await fetch('/api/manage/migrate-images/zip', { method: 'POST', headers: { 'Authorization': 'Bearer ' + state.token, 'Content-Type': 'application/zip' }, body: f });
+      const r = await res.json();
+      if (!res.ok) throw new Error((r && r.error) || ('HTTP ' + res.status));
+      $('#migZipMsg').textContent = t('mig_zip_done') + ' — ' + t('mig_moved') + ': ' + r.migrated + ' / ' + r.total_external;
+      if (r.missing && r.missing.length) $('#migZipMsg').innerHTML += '<br>' + esc(t('mig_failed')) + ': ' + r.missing.slice(0, 20).map((n) => esc(n)).join(', ') + (r.missing.length > 20 ? '…' : '');
+      if (r.too_large && r.too_large.length) $('#migZipMsg').innerHTML += '<br>Too large: ' + r.too_large.slice(0, 20).map((n) => esc(n)).join(', ');
+      if (r.ambiguous && r.ambiguous.length) $('#migZipMsg').innerHTML += '<br>Ambiguous: ' + r.ambiguous.slice(0, 20).map((n) => esc(n)).join(', ');
+      await loadMigStatus();
+      loadBrands(); loadTypes(); loadHomeGrid(true);
+    } catch (e) { $('#migZipMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
   });
 }
 
