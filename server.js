@@ -15,6 +15,9 @@
  *  - Bank transfer orders REQUIRE a payment screenshot before placing.
  *  - Manage is gated to Pyae's personal phone 095117366.
  *  - WooCommerce access is READ-ONLY. Never write to WooCommerce.
+ *  - Product photos live in this shop's own database (images table), served
+ *    via GET /api/images/:id — migrated from WooCommerce so customer photos
+ *    no longer depend on the old WordPress site being up.
  */
 'use strict';
 
@@ -22,6 +25,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const AdmZip = require('adm-zip');
 const store = require('./lib/store');
 
 const app = express();
@@ -1063,6 +1067,19 @@ app.get('/api/manage/orders/:id/screenshot', authMiddleware, orderStaffMiddlewar
   } catch (err) { return next(err); }
 });
 
+// Product photo served from the shop's own database (migrated from
+// WooCommerce, or uploaded by staff). Public, cacheable forever — the URL
+// only ever changes when a new photo is uploaded for that product.
+app.get('/api/images/:id', async (req, res, next) => {
+  try {
+    const img = await store.getImage(req.params.id);
+    if (!img) return res.status(404).json({ error: 'image_not_found' });
+    res.setHeader('Content-Type', img.mime);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.send(img.buffer);
+  } catch (err) { return next(err); }
+});
+
 // ---------- Manage: Users ----------
 
 app.get('/api/manage/users', authMiddleware, managerMiddleware, async (req, res, next) => {
@@ -1289,12 +1306,15 @@ app.post('/api/manage/products', authMiddleware, managerMiddleware, async (req, 
       }
     }
     // Photo (optional): a data URL, same limits as the photo-upload endpoint.
-    let imageUrl = null;
+    // Stored as bytes in the images table (see that endpoint), not inline.
+    let imageBuf = null;
+    let imageMime = null;
     if (b.image_data) {
       const m = String(b.image_data).match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
       if (!m) return res.status(400).json({ error: 'invalid_image' });
-      if (Buffer.from(m[2], 'base64').length > 1500 * 1024) return res.status(400).json({ error: 'image_too_large' });
-      imageUrl = b.image_data;
+      imageBuf = Buffer.from(m[2], 'base64');
+      if (imageBuf.length > 1500 * 1024) return res.status(400).json({ error: 'image_too_large' });
+      imageMime = 'image/' + m[1];
     }
     const existing = await store.listProducts();
     if (existing.some((p) => normName(p.name) === normName(name))) {
@@ -1314,7 +1334,7 @@ app.post('/api/manage/products', authMiddleware, managerMiddleware, async (req, 
       sale_price: salePrice,
       stock,
       in_stock: stock != null ? stock > 0 : true,
-      image_url: imageUrl,
+      image_url: imageBuf ? '/api/images/' + id : null,
       wc_id: null,
       is_new: false,
       best_seller: false,
@@ -1325,6 +1345,7 @@ app.post('/api/manage/products', authMiddleware, managerMiddleware, async (req, 
     };
     if (options) product.in_stock = options.some((o) => o.in_stock);
     await store.saveProduct(product);
+    if (imageBuf) await store.saveImage(product.id, imageBuf, imageMime);
     await logActivity(req, 'product_create', 'product', product.id, `${product.name} — ${product.price} Ks`);
     return res.status(201).json(product);
   } catch (err) { return next(err); }
@@ -1435,21 +1456,25 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
 
 // Product photo upload (manager only). Body {image_data} is a data URL —
 // the frontend downscales to max 800px JPEG first, so uploads stay small.
-// Stored on the product (Postgres), so it survives redeploys, and WC import
-// never overwrites it (import only fills products that have no image yet).
+// Stored as bytes in the images table (not a data URL on the product), so
+// the catalog JSON stays small and the photo loads from this shop. WC
+// import never overwrites it (import only fills products that have no
+// image yet). Body {migrate: true} skips the per-photo activity entry —
+// migration runs upload hundreds of photos and logs one summary instead.
 app.post('/api/manage/products/:id/image', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
-    const { image_data } = req.body || {};
+    const { image_data, migrate } = req.body || {};
     if (typeof image_data !== 'string') return res.status(400).json({ error: 'image_required' });
     const m = image_data.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
     if (!m) return res.status(400).json({ error: 'invalid_image' });
     const buf = Buffer.from(m[2], 'base64');
     if (buf.length > 1500 * 1024) return res.status(400).json({ error: 'image_too_large' });
-    p.image_url = image_data;
+    await store.saveImage(p.id, buf, 'image/' + m[1]);
+    p.image_url = '/api/images/' + p.id;
     await store.saveProduct(p);
-    await logActivity(req, 'product_photo_add', 'product', p.id, p.name);
+    if (!migrate) await logActivity(req, 'product_photo_add', 'product', p.id, p.name);
     return res.json({ ok: true, image_url: p.image_url });
   } catch (err) { return next(err); }
 });
@@ -1458,6 +1483,7 @@ app.delete('/api/manage/products/:id/image', authMiddleware, managerMiddleware, 
   try {
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
+    await store.deleteImage(p.id);
     p.image_url = null;
     await store.saveProduct(p);
     await logActivity(req, 'product_photo_remove', 'product', p.id, p.name);
@@ -1797,6 +1823,114 @@ app.post('/api/manage/woocommerce/import-data', authMiddleware, ownerMiddleware,
     const posOnlyKept = posProducts.filter((p) => !matchedIds.has(p.id)).length;
     await logActivity(req, 'woocommerce_import', 'woocommerce', 'import', `images updated: ${updated}, already had image: ${alreadyHadImage}, POS-only kept: ${posOnlyKept}`);
     return res.json({ updated, already_had_image: alreadyHadImage, pos_only_kept: posOnlyKept });
+  } catch (err) { return next(err); }
+});
+
+// ---------- Manage: move WooCommerce photos into this shop ----------
+// The shop's product photos still point at the old WordPress site. If that
+// site goes slow or down, customer photos break. These endpoints move the
+// photos into this shop's own database (images table), one product at a
+// time from Pyae's browser (the shop server is geo-blocked from WordPress,
+// Pyae's browser in Myanmar is not) or in one ZIP upload.
+//
+// After migration a product's image_url is '/api/images/<id>' — WooCommerce
+// import never overwrites it (import only fills products with no image).
+
+const ZIP_IMAGE_EXTS = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+const MAX_MIGRATED_IMAGE_BYTES = 1500 * 1024;
+
+// https://www.beautyandmemyanmar.com/wp-content/uploads/2023/11/hh.jpg -> 2023/11/hh.jpg
+function wpUploadsRelPath(imageUrl) {
+  const m = String(imageUrl || '').match(/\/wp-content\/uploads\/(.+)$/);
+  return m ? m[1] : null;
+}
+
+// ZIP entries may carry any leading folders (wp-content/uploads/…,
+// uploads/…, a domain folder, …) — keep only what follows 'uploads/'.
+function zipEntryRelPath(name) {
+  let n = String(name || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  const i = n.indexOf('uploads/');
+  if (i >= 0) n = n.slice(i + 'uploads/'.length);
+  return n;
+}
+
+app.get('/api/manage/migrate-images/list', authMiddleware, ownerMiddleware, async (_req, res, next) => {
+  try {
+    const products = await store.listProducts();
+    const external = products.filter((p) => p.image_url && /^https?:\/\//.test(p.image_url));
+    const migrated = products.filter((p) => p.image_url && String(p.image_url).startsWith('/api/images/')).length;
+    const noImage = products.filter((p) => !p.image_url).length;
+    return res.json({
+      total: products.length,
+      external: external.length,
+      migrated,
+      no_image: noImage,
+      items: external.map((p) => ({ id: p.id, name: p.name, image_url: p.image_url })),
+    });
+  } catch (err) { return next(err); }
+});
+
+// One summary log entry per browser migration run (the per-photo upload
+// endpoint skips logging when called with {migrate: true}).
+app.post('/api/manage/migrate-images/summary', authMiddleware, ownerMiddleware, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const migrated = Number(b.migrated) || 0;
+    const failed = Number(b.failed) || 0;
+    const names = Array.isArray(b.failed_names) ? b.failed_names.slice(0, 10) : [];
+    await logActivity(req, 'image_migrate', 'images', 'browser', `migrated: ${migrated}, failed: ${failed}` + (names.length ? ` — ${names.join('; ')}` : ''));
+    return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
+// ZIP upload: the whole wp-content/uploads folder as one ZIP. The raw body
+// is used (no multipart parser dependency); adm-zip extracts in memory.
+app.post('/api/manage/migrate-images/zip', authMiddleware, ownerMiddleware, express.raw({ limit: '100mb', type: 'application/zip' }), async (req, res, next) => {
+  try {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'zip_required' });
+    let zip;
+    try { zip = new AdmZip(req.body); } catch (e) { return res.status(400).json({ error: 'invalid_zip' }); }
+    const entries = zip.getEntries().filter((e) => !e.isDirectory);
+    if (entries.length > 5000) return res.status(400).json({ error: 'zip_too_large' });
+    const byPath = new Map();
+    const byBase = new Map();
+    for (const e of entries) {
+      const rel = zipEntryRelPath(e.entryName);
+      if (!rel || rel.includes('..')) continue;
+      if (!byPath.has(rel)) byPath.set(rel, e);
+      const base = rel.split('/').pop();
+      if (!byBase.has(base)) byBase.set(base, []);
+      byBase.get(base).push(e);
+    }
+    const products = await store.listProducts();
+    const external = products.filter((p) => p.image_url && /^https?:\/\//.test(p.image_url));
+    let migrated = 0;
+    const missing = [];
+    const tooLarge = [];
+    const ambiguous = [];
+    for (const p of external) {
+      const rel = wpUploadsRelPath(p.image_url);
+      let entry = rel ? byPath.get(rel) : null;
+      if (!entry) {
+        // Fall back to the file name alone (some exports flatten folders).
+        const base = String(p.image_url).split('/').pop();
+        const cands = byBase.get(base) || [];
+        if (cands.length === 1) entry = cands[0];
+        else if (cands.length > 1) { ambiguous.push(p.name); continue; }
+      }
+      if (!entry) { missing.push(p.name); continue; }
+      const ext = path.extname(entry.entryName).toLowerCase();
+      const mime = ZIP_IMAGE_EXTS[ext];
+      if (!mime) { missing.push(p.name); continue; }
+      const buf = entry.getData();
+      if (buf.length > MAX_MIGRATED_IMAGE_BYTES) { tooLarge.push(p.name); continue; }
+      await store.saveImage(p.id, buf, mime);
+      p.image_url = '/api/images/' + p.id;
+      await store.saveProduct(p);
+      migrated++;
+    }
+    await logActivity(req, 'image_migrate', 'images', 'zip', `migrated: ${migrated}, missing: ${missing.length}, too large: ${tooLarge.length}, ambiguous: ${ambiguous.length}`);
+    return res.json({ migrated, missing, too_large: tooLarge, ambiguous, total_external: external.length });
   } catch (err) { return next(err); }
 });
 
