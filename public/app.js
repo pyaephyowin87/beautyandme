@@ -1981,7 +1981,7 @@ async function renderManageCatalog(body) {
     '<div class="chips" style="margin-top:10px" id="mgFilterChips">' +
     '<button type="button" class="chip active" data-mgfilter="all">' + esc(t('filter_all')) + ' <span data-mgcount="all"></span></button>' +
     '<button type="button" class="chip" data-mgfilter="in">' + esc(t('filter_in_stock')) + ' <span data-mgcount="in_stock"></span></button>' +
-    '<button type="button" class="chip" data-mgfilter="out">' + esc(t('filter_out_stock')) + ' <span data-mgcount="out_stock"></span></button>' +
+    '<button type="button" class="chip" data-mgfilter="out">' + esc(t('filter_out_stock')) + ' <span data-mgcount="out_of_stock"></span></button>' +
     '<button type="button" class="chip" data-mgfilter="sale">' + esc(t('filter_sale')) + ' <span data-mgcount="sale"></span></button>' +
     '</div><div id="mgTableWrap" class="table-wrap" style="margin-top:12px"></div>' +
     '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgMoreBtn">' + esc(t('more')) + '</button></div>' +
