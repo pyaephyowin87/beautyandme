@@ -508,6 +508,19 @@ function renderChips(container) {
 }
 
 /* ---------------- product cards ---------------- */
+// If a product photo fails to load (dead WooCommerce link, or the tablet
+// cannot reach the old site right now), show the "no image" placeholder
+// instead of the browser's broken-image icon. Called from inline onerror.
+function imgFallback(el) {
+  el.style.display = 'none';
+  const wrap = el.parentElement;
+  if (wrap && !wrap.querySelector('.img-placeholder')) {
+    const s = document.createElement('span');
+    s.className = 'img-placeholder';
+    s.textContent = t('no_image');
+    wrap.appendChild(s);
+  }
+}
 function cardHTML(p) {
   // Variation products: show every size/shade as a tappable chip on the card
   // so customers see the other options (and their prices) without opening the
@@ -522,7 +535,7 @@ function cardHTML(p) {
   const hasSale = !hasOpts && p.sale_price != null && p.sale_price !== '' && Number(p.sale_price) < Number(p.price);
   const salePct = hasSale ? Math.round((1 - Number(p.sale_price) / Number(p.price)) * 100) : 0;
   const img = p.image_url
-    ? '<img src="' + esc(p.image_url) + '" alt="' + esc(p.name) + '" loading="lazy">'
+    ? '<img src="' + esc(p.image_url) + '" alt="' + esc(p.name) + '" loading="lazy" onerror="imgFallback(this)">'
     : '<span class="img-placeholder">' + esc(t('no_image')) + '</span>';
   const priceHTML = hasOpts
     ? '<span class="price-now">' + fmt(optionPrice(selOpt)) + '</span>'
@@ -776,7 +789,7 @@ function renderDetail() {
   const p = state.detail;
   if (!p) return;
   const img = p.image_url
-    ? '<img src="' + esc(p.image_url) + '" alt="' + esc(p.name) + '">'
+    ? '<img src="' + esc(p.image_url) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">'
     : '<span class="img-placeholder">' + esc(t('no_image')) + '</span>';
   let optsHTML = '';
   if (p.options && p.options.length) {
@@ -845,7 +858,7 @@ function renderCart() {
   } else {
     wrap.innerHTML = state.cart.map((i) => {
       const thumb = i.image_url
-        ? '<img src="' + esc(i.image_url) + '" alt="">'
+        ? '<img src="' + esc(i.image_url) + '" alt="" onerror="this.style.display=\'none\'">'
         : esc(t('no_image'));
       return '<div class="cart-line">' +
         '<div class="thumb">' + thumb + '</div>' +
