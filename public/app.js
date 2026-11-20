@@ -69,7 +69,7 @@ const I18N = {
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Import လုပ်မှာ သေချာလား?',
     qty: 'အရေအတွက်', stock_qty: 'Stock အရေအတွက်', price: 'ဈေး', sale_price: 'လျှော့ဈေး',
     filter_all: 'အကုန်', filter_in_stock: 'Stock ရှိ', filter_out_stock: 'ကုန်ပြီ', filter_sale: 'လျှော့ဈေး',
-    add_product: 'ပစ္စည်း အသစ် ထည့်မယ်', product_name: 'ပစ္စည်း နာမည်', new_brand: 'Brand အသစ်…', category: 'Category',
+    add_product: 'ပစ္စည်း အသစ် ထည့်မယ်', product_name: 'ပစ္စည်း နာမည်', new_brand: 'Brand အသစ်…', new_category: 'Category အသစ်…', category: 'Category',
     add_option: 'Option ထည့်မယ်', option_label: 'Size / Shade', product_added: 'ပစ္စည်း အသစ် ထည့်ပြီးပြီ',
     duplicate_product: 'ဒီ နာမည်နဲ့ ပစ္စည်း ရှိပြီးသားပါ', action_product_create: 'ပစ္စည်း အသစ် ထည့်တယ်',
     sale_staff: 'Sale Staff', make_staff: 'Sale Staff လုပ်မယ်', remove_staff: 'Sale Staff ဖြုတ်မယ်', staff_title: 'Sale Staff',
@@ -182,7 +182,7 @@ const I18N = {
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Are you sure you want to run the import?',
     qty: 'Quantity', stock_qty: 'Stock qty', price: 'Price', sale_price: 'Sale price',
     filter_all: 'All', filter_in_stock: 'In Stock', filter_out_stock: 'Sold Out', filter_sale: 'On Sale',
-    add_product: 'Add Product', product_name: 'Product name', new_brand: 'New brand…', category: 'Category',
+    add_product: 'Add Product', product_name: 'Product name', new_brand: 'New brand…', new_category: 'New category…', category: 'Category',
     add_option: 'Add option', option_label: 'Size / Shade', product_added: 'Product added',
     duplicate_product: 'A product with this name already exists', action_product_create: 'Added a product',
     sale_staff: 'Sale Staff', make_staff: 'Make sale staff', remove_staff: 'Remove sale staff', staff_title: 'Sale Staff',
@@ -429,12 +429,19 @@ function appLinkUrl(kind) {
 // universal links to the app. The fb-messenger:// deep link IS handed to
 // the app by the OS even from a webview. If the app is not installed the
 // page stays visible, so after a short wait fall back to the web link.
+// Inside the Capacitor app the web fallback opens in the system browser
+// via the Browser plugin, so the app itself never navigates away from
+// the shop.
 function openMessenger(ev) {
   if (ev) ev.preventDefault();
   const webUrl = (state.shopInfo && state.shopInfo.messenger_url) || 'https://m.me/beautyandme117';
   window.location.href = 'fb-messenger://user-thread/492402784161579';
   setTimeout(() => {
-    if (!document.hidden) window.location.href = webUrl;
+    if (!document.hidden) {
+      const capBrowser = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+      if (capBrowser && capBrowser.open) capBrowser.open({ url: webUrl });
+      else window.location.href = webUrl;
+    }
   }, 1200);
 }
 function onAppButton(kind) {
@@ -2010,13 +2017,18 @@ async function openAddProduct() {
   if (!state.brands || !state.brands.length) {
     try { state.brands = await api('/brands'); } catch (e) { state.brands = []; }
   }
+  if (!state.categories || !state.categories.length) {
+    try { state.categories = await api('/categories'); } catch (e) { state.categories = []; }
+  }
   const brandOpts = (state.brands || []).map((b) => '<option value="' + esc(b.name) + '">' + esc(b.name) + '</option>').join('');
+  const catOpts = (state.categories || []).map((c) => '<option value="' + esc(c.label) + '">' + esc(c.label) + '</option>').join('');
   $('#addProductTitle').textContent = t('add_product');
   $('#addProductBody').innerHTML =
     '<div class="field"><label>' + esc(t('product_name')) + ' *</label><input id="apName" type="text" placeholder="e.g. ANUA Heartleaf Toner 200 ml"></div>' +
     '<div class="field"><label>' + esc(t('brand')) + ' *</label><select id="apBrand">' + brandOpts + '<option value="__new">' + esc(t('new_brand')) + '</option></select></div>' +
     '<div class="field" id="apNewBrandField" hidden><label>' + esc(t('new_brand')) + '</label><input id="apNewBrand" type="text" placeholder="e.g. MEDICUBE"></div>' +
-    '<div class="field"><label>' + esc(t('category')) + '</label><input id="apCategory" type="text" placeholder="e.g. Toner"></div>' +
+    '<div class="field"><label>' + esc(t('category')) + '</label><select id="apCategory">' + catOpts + '<option value="__new">' + esc(t('new_category')) + '</option></select></div>' +
+    '<div class="field" id="apNewCatField" hidden><label>' + esc(t('new_category')) + '</label><input id="apNewCategory" type="text" placeholder="e.g. Toner"></div>' +
     '<div class="field"><label>' + esc(t('price')) + ' (Ks) *</label><input id="apPrice" type="number" min="1" step="500" placeholder="67000"></div>' +
     '<div class="field" id="apSaleField"><label>' + esc(t('sale_price')) + ' (Ks)</label><input id="apSale" type="number" min="0" step="500" placeholder=""></div>' +
     '<div class="field"><label>' + esc(t('stock_qty')) + '</label><input id="apStock" type="number" min="0" step="1" placeholder="—"></div>' +
@@ -2025,6 +2037,9 @@ async function openAddProduct() {
     '<div class="error-box" id="apError" hidden></div>' +
     '<button class="btn btn-primary btn-block" type="button" id="apSubmit">' + esc(t('add_product')) + '</button>';
   $('#apBrand').addEventListener('change', () => { $('#apNewBrandField').hidden = $('#apBrand').value !== '__new'; });
+  const syncApCatField = () => { $('#apNewCatField').hidden = $('#apCategory').value !== '__new'; };
+  $('#apCategory').addEventListener('change', syncApCatField);
+  syncApCatField();
   const syncApSaleField = () => { $('#apSaleField').hidden = $('#apOptions').children.length > 0; };
   const addOptRow = () => {
     const row = document.createElement('div');
@@ -2054,7 +2069,8 @@ async function openAddProduct() {
     const name = $('#apName').value.trim();
     const brandSel = $('#apBrand').value;
     const brand = brandSel === '__new' ? $('#apNewBrand').value.trim() : brandSel;
-    const category = $('#apCategory').value.trim();
+    const catSel = $('#apCategory').value;
+    const category = catSel === '__new' ? $('#apNewCategory').value.trim() : catSel;
     const price = Number($('#apPrice').value);
     const saleRaw = $('#apSale').value.trim();
     const stockRaw = $('#apStock').value.trim();
