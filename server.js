@@ -85,6 +85,8 @@ const PRODUCT_CATEGORY_TYPE = {
   'hair care': 'hair', treatment: 'hair', 'eye care': 'eye',
   'foundation & primer': 'makeup', foundation: 'makeup', 'make up': 'makeup',
   'foundation& primer': 'makeup', accessory: 'accessory', 'sets & gifts': 'sets',
+  // Keys for the 16 clean type labels (Add Product category dropdown).
+  cleanser: 'cleanser', ampoule: 'ampoule', makeup: 'makeup',
 };
 function deriveProductType(p) {
   const n = String(p.name || '').toLowerCase();
@@ -331,6 +333,24 @@ app.get('/api/types', async (_req, res, next) => {
     const out = PRODUCT_TYPE_ORDER
       .filter((t) => counts[t])
       .map((t) => ({ type: t, label: PRODUCT_TYPE_LABELS[t], count: counts[t] }));
+    return res.json(out);
+  } catch (err) { return next(err); }
+});
+
+// Categories for the Add Product form: the same 16 clean type labels the
+// shop shows as type chips, always all 16 (even a 0-count type can be
+// picked for a first product). Staff pick from the list; a free-text
+// "new category" option covers anything outside it, so no typos create
+// duplicate categories. Existing products keep their POS category values.
+app.get('/api/categories', async (_req, res, next) => {
+  try {
+    const counts = {};
+    for (const p of await store.listProducts()) {
+      const t = deriveProductType(p);
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    const out = PRODUCT_TYPE_ORDER
+      .map((t) => ({ type: t, label: PRODUCT_TYPE_LABELS[t], count: counts[t] || 0 }));
     return res.json(out);
   } catch (err) { return next(err); }
 });
