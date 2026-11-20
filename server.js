@@ -1321,7 +1321,7 @@ app.post('/api/manage/products', authMiddleware, managerMiddleware, async (req, 
       sale_featured: false,
       options,
       sku: String(b.sku || '').trim() || null,
-      note: '',
+      note: String(b.note || '').trim(),
     };
     if (options) product.in_stock = options.some((o) => o.in_stock);
     await store.saveProduct(product);
@@ -1334,13 +1334,31 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
   try {
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
-    const { sale_price, is_new, best_seller, sale_featured, price, option_prices, stock, option_stock } = req.body || {};
+    const { sale_price, is_new, best_seller, sale_featured, price, option_prices, stock, option_stock, name, brand, category, note } = req.body || {};
     const before = {
       price: p.price, sale_price: p.sale_price,
       stock: p.stock ?? null,
       best_seller: Boolean(p.best_seller), sale_featured: Boolean(p.sale_featured),
+      name: p.name, brand: p.brand, category: p.category || '', note: p.note || '',
       options: Array.isArray(p.options) ? p.options.map((o) => ({ label: o.label, price: o.price, stock: o.stock ?? null })) : [],
     };
+    // Name / brand / category / description. The id (slug) never changes on
+    // rename: orders, wishlists and carts reference the id, and the slug is
+    // invisible in the shop (single-page app, no product URLs).
+    if (name !== undefined) {
+      const cleanName = String(name).trim();
+      if (!cleanName) return res.status(400).json({ error: 'name_required' });
+      const clash = (await store.listProducts()).find((x) => String(x.id) !== String(p.id) && normName(x.name) === normName(cleanName));
+      if (clash) return res.status(400).json({ error: 'duplicate_product' });
+      p.name = cleanName;
+    }
+    if (brand !== undefined) {
+      const cleanBrand = String(brand).trim();
+      if (!cleanBrand) return res.status(400).json({ error: 'brand_required' });
+      p.brand = cleanBrand;
+    }
+    if (category !== undefined) p.category = String(category);
+    if (note !== undefined) p.note = String(note);
     if (sale_price !== undefined) {
       if (sale_price !== null && (typeof sale_price !== 'number' || sale_price < 0)) {
         return res.status(400).json({ error: 'invalid_sale_price' });
@@ -1394,6 +1412,10 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
     syncInStock(p);
     await store.saveProduct(p);
     const changes = [];
+    if (before.name !== p.name) changes.push(`name: ${before.name} → ${p.name}`);
+    if (before.brand !== p.brand) changes.push(`brand: ${before.brand} → ${p.brand}`);
+    if (before.category !== (p.category || '')) changes.push(`category: ${before.category || '—'} → ${p.category || '—'}`);
+    if (before.note !== (p.note || '')) changes.push(`note: ${(before.note || '—').slice(0, 60)} → ${(p.note || '—').slice(0, 60)}`);
     if (before.price !== p.price) changes.push(`price: ${before.price} → ${p.price} Ks`);
     if (before.sale_price !== p.sale_price) changes.push(`sale price: ${before.sale_price == null ? '—' : before.sale_price} → ${p.sale_price == null ? '—' : p.sale_price} Ks`);
     if ((before.stock ?? null) !== (p.stock ?? null)) changes.push(`stock: ${before.stock == null ? '—' : before.stock} → ${p.stock == null ? '—' : p.stock}`);
