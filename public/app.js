@@ -69,7 +69,7 @@ const I18N = {
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Import လုပ်မှာ သေချာလား?',
     qty: 'အရေအတွက်', stock_qty: 'Stock အရေအတွက်', price: 'ဈေး', sale_price: 'လျှော့ဈေး',
     filter_all: 'အကုန်', filter_in_stock: 'Stock ရှိ', filter_out_stock: 'ကုန်ပြီ', filter_sale: 'လျှော့ဈေး',
-    add_product: 'ပစ္စည်း အသစ် ထည့်မယ်', product_name: 'ပစ္စည်း နာမည်', new_brand: 'Brand အသစ်…', new_category: 'Category အသစ်…', category: 'Category',
+    add_product: 'ပစ္စည်း အသစ် ထည့်မယ်', product_name: 'ပစ္စည်း နာမည်', new_brand: 'Brand အသစ်…', new_category: 'Category အသစ်…', category: 'Category', edit_product: 'ပစ္စည်း ပြင်မယ်', description: 'ဖော်ပြချက်',
     add_option: 'Option ထည့်မယ်', option_label: 'Size / Shade', product_added: 'ပစ္စည်း အသစ် ထည့်ပြီးပြီ',
     duplicate_product: 'ဒီ နာမည်နဲ့ ပစ္စည်း ရှိပြီးသားပါ', action_product_create: 'ပစ္စည်း အသစ် ထည့်တယ်',
     sale_staff: 'Sale Staff', make_staff: 'Sale Staff လုပ်မယ်', remove_staff: 'Sale Staff ဖြုတ်မယ်', staff_title: 'Sale Staff',
@@ -182,7 +182,7 @@ const I18N = {
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Are you sure you want to run the import?',
     qty: 'Quantity', stock_qty: 'Stock qty', price: 'Price', sale_price: 'Sale price',
     filter_all: 'All', filter_in_stock: 'In Stock', filter_out_stock: 'Sold Out', filter_sale: 'On Sale',
-    add_product: 'Add Product', product_name: 'Product name', new_brand: 'New brand…', new_category: 'New category…', category: 'Category',
+    add_product: 'Add Product', product_name: 'Product name', new_brand: 'New brand…', new_category: 'New category…', category: 'Category', edit_product: 'Edit product', description: 'Description',
     add_option: 'Add option', option_label: 'Size / Shade', product_added: 'Product added',
     duplicate_product: 'A product with this name already exists', action_product_create: 'Added a product',
     sale_staff: 'Sale Staff', make_staff: 'Make sale staff', remove_staff: 'Remove sale staff', staff_title: 'Sale Staff',
@@ -2029,6 +2029,7 @@ async function openAddProduct() {
     '<div class="field" id="apNewBrandField" hidden><label>' + esc(t('new_brand')) + '</label><input id="apNewBrand" type="text" placeholder="e.g. MEDICUBE"></div>' +
     '<div class="field"><label>' + esc(t('category')) + '</label><select id="apCategory">' + catOpts + '<option value="__new">' + esc(t('new_category')) + '</option></select></div>' +
     '<div class="field" id="apNewCatField" hidden><label>' + esc(t('new_category')) + '</label><input id="apNewCategory" type="text" placeholder="e.g. Toner"></div>' +
+    '<div class="field"><label>' + esc(t('description')) + '</label><input id="apNote" type="text" placeholder="e.g. Skin type — all skin types"></div>' +
     '<div class="field"><label>' + esc(t('price')) + ' (Ks) *</label><input id="apPrice" type="number" min="1" step="500" placeholder="67000"></div>' +
     '<div class="field" id="apSaleField"><label>' + esc(t('sale_price')) + ' (Ks)</label><input id="apSale" type="number" min="0" step="500" placeholder=""></div>' +
     '<div class="field"><label>' + esc(t('stock_qty')) + '</label><input id="apStock" type="number" min="0" step="1" placeholder="—"></div>' +
@@ -2087,6 +2088,7 @@ async function openAddProduct() {
     }
     const payload = {
       name, brand, category,
+      note: $('#apNote').value.trim(),
       price: options.length ? undefined : price,
       sale_price: (options.length || saleRaw === '') ? null : Number(saleRaw),
       stock: stockVal,
@@ -2101,6 +2103,65 @@ async function openAddProduct() {
       mgCatalog.filter = 'all';
       $$('[data-mgfilter]').forEach((x) => x.classList.toggle('active', x.dataset.mgfilter === 'all'));
       loadMgCatalog(true);
+    } catch (e) {
+      btn.disabled = false;
+      err.textContent = (e.data && e.data.error === 'duplicate_product') ? t('duplicate_product') : t('error_load');
+      err.hidden = false;
+    }
+  });
+  openOverlay('#addProductOverlay', '#addProductModal');
+}
+// Edit an existing product: name, brand, category and description.
+// The product id (slug) never changes on rename — orders, wishlists and
+// carts reference it, and the slug is invisible in the shop. Price, stock
+// and photo stay editable inline in the catalog table as before.
+// Reuses the Add Product modal shell (#addProductOverlay/#addProductModal).
+async function openEditProduct(id) {
+  const p = (mgCatalog.items || []).find((x) => String(x.id) === String(id));
+  if (!p) { toast(t('error_load')); return; }
+  if (!state.brands || !state.brands.length) {
+    try { state.brands = await api('/brands'); } catch (e) { state.brands = []; }
+  }
+  if (!state.categories || !state.categories.length) {
+    try { state.categories = await api('/categories'); } catch (e) { state.categories = []; }
+  }
+  const brandOpts = (state.brands || []).map((b) => '<option value="' + esc(b.name) + '"' + (b.name === p.brand ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('');
+  const labels = (state.categories || []).map((c) => c.label);
+  // The stored category may be an old POS value (e.g. ANUA, SERUM) that is
+  // not one of the 16 clean labels — keep it as the selected option so the
+  // form shows what the product has today instead of silently changing it.
+  const curCat = p.category || '';
+  const catOpts = (curCat && !labels.includes(curCat)
+    ? '<option value="' + esc(curCat) + '" selected>' + esc(curCat) + '</option>' : '') +
+    labels.map((l) => '<option value="' + esc(l) + '"' + (l === curCat ? ' selected' : '') + '>' + esc(l) + '</option>').join('');
+  $('#addProductTitle').textContent = t('edit_product');
+  $('#addProductBody').innerHTML =
+    '<div class="field"><label>' + esc(t('product_name')) + ' *</label><input id="epName" type="text" value="' + esc(p.name) + '"></div>' +
+    '<div class="field"><label>' + esc(t('brand')) + ' *</label><select id="epBrand">' + brandOpts + '<option value="__new">' + esc(t('new_brand')) + '</option></select></div>' +
+    '<div class="field" id="epNewBrandField" hidden><label>' + esc(t('new_brand')) + '</label><input id="epNewBrand" type="text" placeholder="e.g. MEDICUBE"></div>' +
+    '<div class="field"><label>' + esc(t('category')) + '</label><select id="epCategory">' + catOpts + '<option value="__new">' + esc(t('new_category')) + '</option></select></div>' +
+    '<div class="field" id="epNewCatField" hidden><label>' + esc(t('new_category')) + '</label><input id="epNewCategory" type="text" placeholder="e.g. Toner"></div>' +
+    '<div class="field"><label>' + esc(t('description')) + '</label><input id="epNote" type="text" value="' + esc(p.note || '') + '" placeholder="e.g. Skin type — all skin types"></div>' +
+    '<div class="error-box" id="epError" hidden></div>' +
+    '<button class="btn btn-primary btn-block" type="button" id="epSubmit">' + esc(t('save_changes')) + '</button>';
+  $('#epBrand').addEventListener('change', () => { $('#epNewBrandField').hidden = $('#epBrand').value !== '__new'; });
+  $('#epCategory').addEventListener('change', () => { $('#epNewCatField').hidden = $('#epCategory').value !== '__new'; });
+  $('#epSubmit').addEventListener('click', async () => {
+    const err = $('#epError'); err.hidden = true;
+    const name = $('#epName').value.trim();
+    const brandSel = $('#epBrand').value;
+    const brand = brandSel === '__new' ? $('#epNewBrand').value.trim() : brandSel;
+    const catSel = $('#epCategory').value;
+    const category = catSel === '__new' ? $('#epNewCategory').value.trim() : catSel;
+    const note = $('#epNote').value.trim();
+    if (!name || !brand) { err.textContent = t('fill_all'); err.hidden = false; return; }
+    const btn = $('#epSubmit'); btn.disabled = true;
+    try {
+      const updated = await api('/manage/products/' + encodeURIComponent(p.id), { method: 'PATCH', body: JSON.stringify({ name, brand, category, note }) });
+      Object.assign(p, updated);
+      paintMgCatalog();
+      closeOverlay('#addProductOverlay', '#addProductModal');
+      toast(t('saved'));
     } catch (e) {
       btn.disabled = false;
       err.textContent = (e.data && e.data.error === 'duplicate_product') ? t('duplicate_product') : t('error_load');
@@ -2145,6 +2206,7 @@ function paintMgCatalog() {
         ? '<img src="' + esc(p.image_url) + '" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block">'
         : '<span style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--line);border-radius:8px;color:var(--muted);font-size:22px;line-height:1">+</span>') +
       '</div><div style="min-width:0"><strong>' + esc(p.name) + '</strong><br><span style="color:var(--muted);font-size:12px">' + esc(p.brand || '') + '</span>' +
+      ' <button type="button" data-edit="' + esc(String(p.id)) + '" style="border:0;background:none;color:var(--accent);font-size:12px;padding:0 2px;cursor:pointer">✏️ ' + esc(t('edit_product')) + '</button>' +
       (p.image_url ? ' <button type="button" data-rmphoto="' + esc(String(p.id)) + '" title="' + esc(t('remove_photo')) + '" style="border:0;background:none;color:var(--muted);font-size:13px;padding:0 2px">✕</button>' : '') +
       (Array.isArray(p.options) && p.options.length ? '<div style="margin-top:6px">' + p.options.map((o) =>
         '<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span style="font-size:12px;color:var(--muted);flex:1;min-width:0">' + esc(o.label) + '</span>' +
@@ -2256,6 +2318,8 @@ function paintMgCatalog() {
       toast(t('deleted'));
     } catch (e) { toast(t('error_load')); }
   }));
+  // Edit name / brand / category / description for a product.
+  $$('[data-edit]', wrap).forEach((b) => b.addEventListener('click', () => openEditProduct(b.dataset.edit)));
 }
 async function renderManageCoupons(body) {
   body.innerHTML = '<div class="mg-card"><h3>Coupons</h3>' +
