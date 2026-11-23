@@ -97,6 +97,11 @@ const I18N = {
     mig_zip_hint: 'WP admin ကနေ wp-content/uploads folder ကို ZIP နဲ့ ဒေါင်းပြီး ဒီမှာ တင်ပါ။',
     mig_zip_btn: 'ZIP တင်ပြီး ရွှေ့မယ်',
     mig_zip_done: 'ZIP ကနေ ရွှေ့ပြီးပါပြီ',
+    mig_remove_title: 'WP ပုံတွေ အကုန် ဖြုတ်မယ်',
+    mig_remove_hint: 'အဟောင်း website က ပုံတွေ (link တွေ) ကို ပစ္စည်းတွေကနေ အကုန် ဖြုတ်မယ်။ ပုံမရှိတဲ့ ပစ္စည်းတွေက "ပုံ မရှိသေးပါ" လို့ ပြမယ် — ဝန်ထမ်းတွေ ဘယ်ဟာ ပြန်ထည့်ရမလဲ သိရမယ်။ shop ထဲမှာ သိမ်းပြီးသား ပုံတွေကို မထိဘူး။',
+    mig_remove_btn: 'WP ပုံတွေ အကုန် ဖြုတ်မယ်',
+    confirm_remove_external: 'WP ပုံတွေ အကုန် ဖြုတ်မှာ သေချာလား? ပုံဖြုတ်လိုက်တဲ့ ပစ္စည်းတွေက "ပုံ မရှိသေးပါ" လို့ ပြမယ် — ဝန်ထမ်းတွေ ပြန်ထည့်မှ ပုံပြန်ပေါ်မယ်။',
+    mig_removed: 'ဖြုတ်ပြီးပါပြီ',
     action_image_migrate: 'ပုံတွေ ဆိုင်ထဲ ရွှေ့တယ်',
     products: 'ပစ္စည်းများ', orders: 'အော်ဒါများ', sales: 'ရောင်းအား', customers: 'ဝယ်သူများ',
     fill_all: 'အချက်အလက် အကုန် ဖြည့်ပါ', invalid_phone: 'ဖုန်း နံပါတ် မမှန်ပါ',
@@ -223,6 +228,11 @@ const I18N = {
     mig_zip_hint: 'Download the wp-content/uploads folder as a ZIP from WP admin and upload it here.',
     mig_zip_btn: 'Upload ZIP and move',
     mig_zip_done: 'Moved from ZIP',
+    mig_remove_title: 'Remove all WP photos',
+    mig_remove_hint: 'Remove the old-website photo links from all products. Products without a photo will show "No photo yet" — so staff can see which ones still need a photo. Photos already stored in the shop are left untouched.',
+    mig_remove_btn: 'Remove all WP photos',
+    confirm_remove_external: 'Remove all WP photos? Those products will show "No photo yet" until staff re-add their photos.',
+    mig_removed: 'Removed',
     action_image_migrate: 'Moved photos into the shop',
     products: 'Products', orders: 'Orders', sales: 'Sales', customers: 'Customers',
     fill_all: 'Please fill in all fields', invalid_phone: 'Invalid phone number',
@@ -2549,7 +2559,11 @@ async function renderManageWoo(body) {
     '<div class="meta-line">' + esc(t('mig_zip_hint')) + '</div>' +
     '<div class="field"><input id="migZip" type="file" accept=".zip,application/zip"></div>' +
     '<button class="btn btn-outline" type="button" id="migZipBtn">' + esc(t('mig_zip_btn')) + '</button>' +
-    '<div id="migZipMsg" class="meta-line" style="margin-top:10px"></div></div>';
+    '<div id="migZipMsg" class="meta-line" style="margin-top:10px"></div>' +
+    '<h4 style="margin-top:14px">' + esc(t('mig_remove_title')) + '</h4>' +
+    '<div class="meta-line">' + esc(t('mig_remove_hint')) + '</div>' +
+    '<button class="btn btn-outline" type="button" id="migRemoveExternal">' + esc(t('mig_remove_btn')) + '</button>' +
+    '<div id="migRemoveMsg" class="meta-line" style="margin-top:10px"></div></div>';
   $$('[data-eye]').forEach((b) => b.addEventListener('click', () => {
     const inp = $('#' + b.dataset.eye);
     inp.type = inp.type === 'password' ? 'text' : 'password';
@@ -2732,6 +2746,18 @@ async function renderManageWoo(body) {
       await loadMigStatus();
       loadBrands(); loadTypes(); loadHomeGrid(true);
     } catch (e) { $('#migZipMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
+  });
+  // Remove all external (WP-hosted) photos so staff can see which
+  // products still need a photo. Shop-stored photos are untouched.
+  $('#migRemoveExternal').addEventListener('click', async () => {
+    if (!window.confirm(t('confirm_remove_external'))) return;
+    $('#migRemoveMsg').textContent = t('loading');
+    try {
+      const r = await api('/manage/migrate-images/remove-external', { method: 'POST' });
+      $('#migRemoveMsg').textContent = t('mig_removed') + ' — ' + r.removed;
+      await loadMigStatus();
+      loadBrands(); loadTypes(); loadHomeGrid(true);
+    } catch (e) { $('#migRemoveMsg').textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : ''); }
   });
 }
 
