@@ -67,6 +67,7 @@ const I18N = {
     close: 'ပိတ်မယ်', remove: 'ဖယ်မယ်', save: 'သိမ်းမယ်', add: 'ထည့်မယ်', del: 'ဖျက်မယ်',
     saved: 'သိမ်းပြီးပါပြီ', deleted: 'ဖျက်ပြီးပါပြီ', confirm_delete: 'ဖျက်မှာ သေချာလား?',
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Import လုပ်မှာ သေချာလား?',
+    woo_disconnect: 'WooCommerce ဖြုတ်မယ်', confirm_disconnect: 'WooCommerce ချိတ်ဆက်မှုကို ဖြုတ်မှာ သေချာလား? ပြီးရင် Preview/Import လုပ်လို့ မရတော့ဘူး။', disconnected: 'WooCommerce ဖြုတ်ပြီးပါပြီ',
     qty: 'အရေအတွက်', stock_qty: 'Stock အရေအတွက်', price: 'ဈေး', sale_price: 'လျှော့ဈေး',
     filter_all: 'အကုန်', filter_in_stock: 'Stock ရှိ', filter_out_stock: 'ကုန်ပြီ', filter_sale: 'လျှော့ဈေး',
     add_product: 'ပစ္စည်း အသစ် ထည့်မယ်', product_name: 'ပစ္စည်း နာမည်', new_brand: 'Brand အသစ်…', new_category: 'Category အသစ်…', category: 'Category', edit_product: 'ပစ္စည်း ပြင်မယ်', description: 'ဖော်ပြချက်',
@@ -192,6 +193,7 @@ const I18N = {
     close: 'Close', remove: 'Remove', save: 'Save', add: 'Add', del: 'Delete',
     saved: 'Saved', deleted: 'Deleted', confirm_delete: 'Are you sure you want to delete this?',
     test: 'Test connection', preview: 'Preview', import: 'Import', confirm_import: 'Are you sure you want to run the import?',
+    woo_disconnect: 'Disconnect WooCommerce', confirm_disconnect: 'Disconnect WooCommerce? Preview/Import will no longer work after this.', disconnected: 'WooCommerce disconnected',
     qty: 'Quantity', stock_qty: 'Stock qty', price: 'Price', sale_price: 'Sale price',
     filter_all: 'All', filter_in_stock: 'In Stock', filter_out_stock: 'Sold Out', filter_sale: 'On Sale',
     add_product: 'Add Product', product_name: 'Product name', new_brand: 'New brand…', new_category: 'New category…', category: 'Category', edit_product: 'Edit product', description: 'Description',
@@ -2525,6 +2527,7 @@ async function renderManageWoo(body) {
     '<button class="btn btn-outline" type="button" id="wooTest">' + esc(t('test')) + '</button>' +
     '<button class="btn btn-outline" type="button" id="wooPreview">' + esc(t('preview')) + '</button>' +
     '<button class="btn btn-outline" type="button" id="wooImport">' + esc(t('import')) + '</button>' +
+    '<button class="btn btn-outline" type="button" id="wooDisconnect">' + esc(t('woo_disconnect')) + '</button>' +
     '</div><div id="wooMsg" class="meta-line" style="margin-top:10px"></div>' +
     '<div id="wooResult"></div></div>' +
     // Move WooCommerce photos into this shop (fix-batch-20): the photos
@@ -2568,6 +2571,21 @@ async function renderManageWoo(body) {
       $('#wooSecretSaved').textContent = s.consumer_secret_masked || $('#wooSecretSaved').textContent;
       $('#wooKey').value = ''; $('#wooSecret').value = '';
       $('#wooMsg').textContent = t('saved');
+    } catch (e) { $('#wooMsg').textContent = t('error_load'); }
+  });
+  // Disconnect: clear the saved site URL + key + secret. The server
+  // accepts explicit empty strings here; products, orders and photos
+  // in the shop's own database are not touched.
+  $('#wooDisconnect').addEventListener('click', async () => {
+    if (!window.confirm(t('confirm_disconnect'))) return;
+    try {
+      await api('/manage/settings/woocommerce', { method: 'PUT', body: JSON.stringify({ site_url: '', consumer_key: '', consumer_secret: '' }) });
+      $('#wooStatus').textContent = t('wc_not_configured');
+      $('#wooSite').value = '';
+      $('#wooKeySaved').textContent = '—';
+      $('#wooSecretSaved').textContent = '—';
+      $('#wooKey').value = ''; $('#wooSecret').value = '';
+      $('#wooMsg').textContent = t('disconnected');
     } catch (e) { $('#wooMsg').textContent = t('error_load'); }
   });
   // WooCommerce is fetched from THIS browser, not from the shop server:
