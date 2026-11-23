@@ -71,6 +71,7 @@ const I18N = {
     qty: 'အရေအတွက်', stock_qty: 'Stock အရေအတွက်', price: 'ဈေး', sale_price: 'လျှော့ဈေး',
     filter_all: 'အကုန်', filter_in_stock: 'Stock ရှိ', filter_out_stock: 'ကုန်ပြီ', filter_sale: 'လျှော့ဈေး',
     add_product: 'ပစ္စည်း အသစ် ထည့်မယ်', product_name: 'ပစ္စည်း နာမည်', new_brand: 'Brand အသစ်…', new_category: 'Category အသစ်…', category: 'Category', edit_product: 'ပစ္စည်း ပြင်မယ်', description: 'ဖော်ပြချက်',
+    excel_export: 'Excel ထုတ်မယ်', excel_import: 'Excel သွင်းမယ်', excel_preview: 'Preview — ပြောင်းမယ့် အချက်တွေ', excel_apply: 'အပ်မယ်', excel_cancel: 'မလုပ်တော့ဘူး', excel_imported: 'Excel သွင်းပြီးပါပြီ', excel_no_changes: 'ပြောင်းစရာ မရှိပါ', excel_to_change: 'ပြောင်းမယ်', excel_skipped: 'ကျော်သွားတယ်', excel_reason_no_id: 'ID မရှိပါ', excel_reason_unknown_id: 'ID မသိပါ', excel_reason_invalid_price: 'ဈေး မမှန်ပါ', excel_reason_invalid_sale_price: 'လျှော့ဈေး မမှန်ပါ', excel_reason_invalid_stock: 'Stock မမှန်ပါ', excel_reason_option_price: 'Option ဈေး — app ထဲမှာ ပြင်ပါ', excel_reason_option_stock: 'Option stock — app ထဲမှာ ပြင်ပါ',
     add_option: 'Option ထည့်မယ်', option_label: 'Size / Shade', product_added: 'ပစ္စည်း အသစ် ထည့်ပြီးပြီ',
     duplicate_product: 'ဒီ နာမည်နဲ့ ပစ္စည်း ရှိပြီးသားပါ', action_product_create: 'ပစ္စည်း အသစ် ထည့်တယ်',
     sale_staff: 'Sale Staff', make_staff: 'Sale Staff လုပ်မယ်', remove_staff: 'Sale Staff ဖြုတ်မယ်', staff_title: 'Sale Staff',
@@ -202,6 +203,7 @@ const I18N = {
     qty: 'Quantity', stock_qty: 'Stock qty', price: 'Price', sale_price: 'Sale price',
     filter_all: 'All', filter_in_stock: 'In Stock', filter_out_stock: 'Sold Out', filter_sale: 'On Sale',
     add_product: 'Add Product', product_name: 'Product name', new_brand: 'New brand…', new_category: 'New category…', category: 'Category', edit_product: 'Edit product', description: 'Description',
+    excel_export: 'Export Excel', excel_import: 'Import Excel', excel_preview: 'Preview — changes to apply', excel_apply: 'Apply', excel_cancel: 'Cancel', excel_imported: 'Excel import done', excel_no_changes: 'Nothing to change', excel_to_change: 'To change', excel_skipped: 'Skipped', excel_reason_no_id: 'No ID', excel_reason_unknown_id: 'Unknown ID', excel_reason_invalid_price: 'Invalid price', excel_reason_invalid_sale_price: 'Invalid sale price', excel_reason_invalid_stock: 'Invalid stock', excel_reason_option_price: 'Option price — change in the app', excel_reason_option_stock: 'Option stock — change in the app',
     add_option: 'Add option', option_label: 'Size / Shade', product_added: 'Product added',
     duplicate_product: 'A product with this name already exists', action_product_create: 'Added a product',
     sale_staff: 'Sale Staff', make_staff: 'Make sale staff', remove_staff: 'Remove sale staff', staff_title: 'Sale Staff',
@@ -1990,6 +1992,11 @@ async function renderManageCatalog(body) {
     '<input id="mgSearch" type="search" placeholder="' + esc(t('search_products')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
     '<button class="btn btn-primary" type="button" id="mgSearchBtn">' + esc(t('search_btn')) + '</button>' +
     '</div><button class="btn btn-primary btn-block" type="button" id="mgAddBtn" style="margin-top:10px">+ ' + esc(t('add_product')) + '</button>' +
+    '<div class="row-flex" style="margin-top:10px">' +
+    '<button class="btn btn-outline" type="button" id="mgExportBtn" style="flex:1">' + esc(t('excel_export')) + '</button>' +
+    '<button class="btn btn-outline" type="button" id="mgImportBtn" style="flex:1">' + esc(t('excel_import')) + '</button>' +
+    '</div><input id="mgImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>' +
+    '<div id="mgExcelPanel" style="margin-top:10px"></div>' +
     '<div class="chips" style="margin-top:10px" id="mgFilterChips">' +
     '<button type="button" class="chip active" data-mgfilter="all">' + esc(t('filter_all')) + ' <span data-mgcount="all"></span></button>' +
     '<button type="button" class="chip" data-mgfilter="in">' + esc(t('filter_in_stock')) + ' <span data-mgcount="in_stock"></span></button>' +
@@ -2007,6 +2014,66 @@ async function renderManageCatalog(body) {
   $('#mgSearchBtn').addEventListener('click', doSearch);
   $('#mgSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
   $('#mgAddBtn').addEventListener('click', openAddProduct);
+  // --- Catalog Excel export / import ---
+  let mgImportFile = null;
+  function excelFieldLabel(field) {
+    return field === 'price' ? t('price') : field === 'sale_price' ? t('sale_price') : t('stock_qty');
+  }
+  function renderExcelPreview(d) {
+    const panel = $('#mgExcelPanel');
+    const fieldLine = (c) => esc(c.name) + ' — ' + esc(excelFieldLabel(c.field)) + ': ' + (c.from == null ? '—' : esc(String(c.from))) + ' → ' + esc(String(c.to));
+    let html = '<div class="mg-card" style="margin-top:0"><h3>' + esc(t('excel_preview')) + '</h3>' +
+      '<div class="meta-line">' + esc(t('excel_to_change')) + ': ' + d.products_changed + ' · ' + esc(t('price')) + ': ' + d.counts.price + ' · ' + esc(t('sale_price')) + ': ' + d.counts.sale_price + ' · ' + esc(t('stock_qty')) + ': ' + d.counts.stock + ' · ' + esc(t('excel_skipped')) + ': ' + d.skipped_total + '</div>';
+    if (d.changes.length) html += '<div style="font-size:13px;margin-top:8px">' + d.changes.slice(0, 10).map(fieldLine).join('<br>') + (d.changes.length > 10 ? '<br>…' : '') + '</div>';
+    else html += '<div class="meta-line" style="margin-top:8px">' + esc(t('excel_no_changes')) + '</div>';
+    if (d.skipped.length) html += '<div style="font-size:13px;margin-top:8px;color:var(--muted)">' + d.skipped.slice(0, 10).map((s) => esc(t('excel_reason_' + s.reason) || s.reason) + (s.name ? ' — ' + esc(s.name) : '') + (s.id ? ' (' + esc(String(s.id)) + ')' : '')).join('<br>') + (d.skipped.length > 10 ? '<br>…' : '') + '</div>';
+    html += '<div class="row-flex" style="margin-top:10px"><button class="btn btn-primary" type="button" id="mgExcelApply" ' + (d.products_changed ? '' : 'disabled') + '>' + esc(t('excel_apply')) + '</button>' +
+      '<button class="btn btn-outline" type="button" id="mgExcelCancel">' + esc(t('excel_cancel')) + '</button></div></div>';
+    panel.innerHTML = html;
+    $('#mgExcelCancel').addEventListener('click', () => { panel.innerHTML = ''; mgImportFile = null; });
+    const applyBtn = $('#mgExcelApply');
+    if (applyBtn) applyBtn.addEventListener('click', async () => {
+      if (!mgImportFile) return;
+      applyBtn.disabled = true;
+      try {
+        const res = await fetch('/api/manage/products/import?dry_run=0', { method: 'POST', headers: { Authorization: 'Bearer ' + state.token, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, body: mgImportFile });
+        const r = await res.json();
+        if (!res.ok) throw new Error((r && r.error) || ('HTTP ' + res.status));
+        panel.innerHTML = '<div class="meta-line">' + esc(t('excel_imported')) + ' — ' + r.products_changed + '</div>';
+        mgImportFile = null;
+        loadMgCatalog(true); loadBrands(); loadTypes(); loadHomeGrid(true);
+      } catch (e) { panel.innerHTML = '<div class="error-box">' + esc(t('error_load')) + (e && e.message ? ' (' + esc(e.message) + ')' : '') + '</div>'; }
+    });
+  }
+  $('#mgExportBtn').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/manage/products/export', { headers: { Authorization: 'Bearer ' + state.token } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const cd = res.headers.get('content-disposition') || '';
+      const m = cd.match(/filename="([^"]+)"/);
+      a.download = m ? m[1] : 'beauty-me-catalog.xlsx';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (e) { toast(t('error_load')); }
+  });
+  $('#mgImportBtn').addEventListener('click', () => { $('#mgImportFile').click(); });
+  $('#mgImportFile').addEventListener('change', async () => {
+    const f = $('#mgImportFile').files[0];
+    $('#mgImportFile').value = '';
+    if (!f) return;
+    mgImportFile = f;
+    const panel = $('#mgExcelPanel');
+    panel.innerHTML = '<div class="meta-line">' + esc(t('loading')) + '</div>';
+    try {
+      const res = await fetch('/api/manage/products/import?dry_run=1', { method: 'POST', headers: { Authorization: 'Bearer ' + state.token, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, body: f });
+      const d = await res.json();
+      if (!res.ok) throw new Error((d && d.error) || ('HTTP ' + res.status));
+      renderExcelPreview(d);
+    } catch (e) { panel.innerHTML = '<div class="error-box">' + esc(t('error_load')) + (e && e.message ? ' (' + esc(e.message) + ')' : '') + '</div>'; }
+  });
   // Status filter: one list, one tap — and it combines with the search above
   // (e.g. ANUA + ကုန်ပြီ finds the ANUA items to restock). The reset reloads
   // from offset 0, so the list can never vanish the way it did in v15.
