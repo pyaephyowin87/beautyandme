@@ -1934,6 +1934,23 @@ app.post('/api/manage/migrate-images/zip', authMiddleware, ownerMiddleware, expr
   } catch (err) { return next(err); }
 });
 
+// Remove every external (WordPress-hosted) product photo, so staff can
+// see which products still need a photo re-added in the shop. Only
+// http(s) URLs are cleared; photos already stored in the shop
+// (/api/images/…) are left untouched, as are products with no photo.
+app.post('/api/manage/migrate-images/remove-external', authMiddleware, ownerMiddleware, async (req, res, next) => {
+  try {
+    const products = await store.listProducts();
+    const external = products.filter((p) => p.image_url && /^https?:\/\//.test(p.image_url));
+    for (const p of external) {
+      p.image_url = null;
+      await store.saveProduct(p);
+    }
+    await logActivity(req, 'image_migrate', 'images', 'remove-external', `removed external photos: ${external.length}`);
+    return res.json({ removed: external.length });
+  } catch (err) { return next(err); }
+});
+
 // ---------- static / SPA fallback ----------
 
 app.get('/', (_req, res) => {
