@@ -1454,6 +1454,153 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
   } catch (err) { return next(err); }
 });
 
+const XLSX = require('xlsx');
+
+// Catalog Excel export / import (fix-batch-25). Export: one row per
+// product — ID (match key, never edit), Name, Brand, Price, Sale Price,
+// Stock Qty — plus a Read me sheet. Import matches rows by ID; a blank
+// cell means "no change". Price/stock apply only to products without
+// options (same rule as the per-product editor); sale price applies to
+// all. Preview (?dry_run=1) shows what would change before anything is
+// applied; apply (?dry_run=0) re-reads the file against current data.
+const CATALOG_XLSX_COLUMNS = ['ID', 'Name', 'Brand', 'Price', 'Sale Price', 'Stock Qty'];
+
+app.get('/api/manage/products/export', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try {
+    const products = await store.listProducts();
+    // Option products keep price/stock per option, so those cells stay
+    // blank here (edit them in the app) — a round-trip of an untouched
+    // export must import as zero changes and zero skips.
+    const rows = products.map((p) => {
+      const hasOptions = Array.isArray(p.options) && p.options.length;
+      return [
+        p.id,
+        p.name,
+        p.brand,
+        hasOptions ? '' : p.price,
+        p.sale_price == null ? '' : p.sale_price,
+        hasOptions ? '' : (p.stock == null ? '' : p.stock),
+      ];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([CATALOG_XLSX_COLUMNS, ...rows]);
+    ws['!cols'] = [{ wch: 42 }, { wch: 48 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+    const readme = XLSX.utils.aoa_to_sheet([
+      ['Beauty & Me — Catalog Excel (Read me)'],
+      [''],
+      ['ID ကို ဘယ်တော့မှ မပြင်ပါနဲ့ — ဒါက ပစ္စည်း တိုက်ဆိုင်တဲ့ key ပါ။'],
+      ['အလွတ်ထားတဲ့ cell က "မပြောင်းဘူး" လို့ ဆိုလိုပါတယ်။'],
+      ['Price: ကိန်းဂဏန်း (0 ထက် ကြီးရမယ်) — option ရှိတဲ့ ပစ္စည်းတွေမှာ မပြောင်းပါ။'],
+      ['Sale Price: ကိန်းဂဏန်း (0 နဲ့ အထက်) — option ရှိတဲ့ ပစ္စည်းတွေမှာလည်း ပြောင်းပါတယ်။'],
+      ['Stock Qty: ကိန်းဂဏန်း အပြည့်အဝ (0 = ကုန်ပြီ) — option ရှိတဲ့ ပစ္စည်းတွေမှာ မပြောင်းပါ။'],
+      ['Name / Brand ကို ဒီမှာ ပြင်လို့ မရပါ — app ထဲက Edit product မှာ ပြင်ပါ။'],
+      ['ပုံတွေကို Excel နဲ့ မရပါ — app ထဲက ပုံထည့်မယ် မှာ တင်ပါ။'],
+      ['Import လုပ်ခင် preview ပြပြီး confirm မှ အပ်ပါတယ်။'],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Products');
+    XLSX.utils.book_append_sheet(wb, readme, 'Read me');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="beauty-me-catalog-${stamp}.xlsx"`);
+    return res.send(buf);
+  } catch (err) { return next(err); }
+});
+
+function parseCatalogXlsx(buf) {
+  const wb = XLSX.read(buf, { type: 'buffer' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) return { error: 'empty_file' };
+  const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (!aoa.length) return { error: 'empty_file' };
+  const header = aoa[0].map((h) => String(h || '').trim().toLowerCase());
+  const col = {};
+  const wanted = { id: ['id'], name: ['name'], brand: ['brand'], price: ['price'], sale_price: ['sale price', 'sale_price'], stock: ['stock qty', 'stock_qty', 'stock'] };
+  for (const [name, keys] of Object.entries(wanted)) {
+    const i = header.findIndex((h) => keys.includes(h));
+    if (i >= 0) col[name] = i;
+  }
+  if (col.id === undefined) return { error: 'missing_id_column' };
+  return { col, rows: aoa.slice(1) };
+}
+
+// Blank = no change (undefined). A real number = the new value.
+// Anything else = invalid (null).
+function catalogCellNumber(v) {
+  if (v === '' || v === null || v === undefined) return undefined;
+  if (typeof v === 'number') return v;
+  const n = Number(String(v).trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+app.post('/api/manage/products/import', authMiddleware, managerMiddleware, express.raw({ limit: '10mb', type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream'] }), async (req, res, next) => {
+  try {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'file_required' });
+    let parsed;
+    try { parsed = parseCatalogXlsx(req.body); } catch (e) { return res.status(400).json({ error: 'invalid_file' }); }
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const { col, rows } = parsed;
+    const dryRun = req.query.dry_run === '1';
+    const products = await store.listProducts();
+    const byId = new Map(products.map((p) => [String(p.id), p]));
+    const changes = [];
+    const skipped = [];
+    const changedIds = new Set();
+    const counts = { price: 0, sale_price: 0, stock: 0 };
+    let rowNo = 1;
+    let rowsSeen = 0;
+    for (const row of rows) {
+      rowNo++;
+      if (!row || row.every((c) => c === '' || c === null || c === undefined)) continue;
+      rowsSeen++;
+      const id = String(row[col.id] || '').trim();
+      if (!id) { skipped.push({ row: rowNo, reason: 'no_id' }); continue; }
+      const p = byId.get(id);
+      if (!p) { skipped.push({ row: rowNo, id, reason: 'unknown_id' }); continue; }
+      const hasOptions = Array.isArray(p.options) && p.options.length > 0;
+      // Validate everything first: one bad cell skips the whole row.
+      const priceV = col.price !== undefined ? catalogCellNumber(row[col.price]) : undefined;
+      const saleV = col.sale_price !== undefined ? catalogCellNumber(row[col.sale_price]) : undefined;
+      const stockV = col.stock !== undefined ? catalogCellNumber(row[col.stock]) : undefined;
+      if (priceV === null) { skipped.push({ row: rowNo, id, name: p.name, reason: 'invalid_price' }); continue; }
+      if (saleV === null) { skipped.push({ row: rowNo, id, name: p.name, reason: 'invalid_sale_price' }); continue; }
+      if (stockV === null) { skipped.push({ row: rowNo, id, name: p.name, reason: 'invalid_stock' }); continue; }
+      if (priceV !== undefined && priceV <= 0) { skipped.push({ row: rowNo, id, name: p.name, reason: 'invalid_price' }); continue; }
+      if (saleV !== undefined && saleV < 0) { skipped.push({ row: rowNo, id, name: p.name, reason: 'invalid_sale_price' }); continue; }
+      if (stockV !== undefined && (!Number.isInteger(stockV) || stockV < 0)) { skipped.push({ row: rowNo, id, name: p.name, reason: 'invalid_stock' }); continue; }
+      const patch = {};
+      if (priceV !== undefined) {
+        if (hasOptions) {
+          if (priceV !== p.price) skipped.push({ row: rowNo, id, name: p.name, reason: 'option_price' });
+        } else if (priceV !== p.price) patch.price = priceV;
+      }
+      if (saleV !== undefined && saleV !== (p.sale_price == null ? undefined : p.sale_price)) patch.sale_price = saleV;
+      if (stockV !== undefined) {
+        if (hasOptions) {
+          if (stockV !== (p.stock == null ? undefined : p.stock)) skipped.push({ row: rowNo, id, name: p.name, reason: 'option_stock' });
+        } else if (stockV !== (p.stock == null ? undefined : p.stock)) patch.stock = stockV;
+      }
+      if (!Object.keys(patch).length) continue;
+      for (const [field, to] of Object.entries(patch)) {
+        const from = field === 'price' ? p.price : field === 'sale_price' ? (p.sale_price == null ? null : p.sale_price) : (p.stock == null ? null : p.stock);
+        changes.push({ id, name: p.name, field, from, to });
+        counts[field]++;
+      }
+      changedIds.add(id);
+      if (!dryRun) {
+        Object.assign(p, patch);
+        syncInStock(p);
+        await store.saveProduct(p);
+      }
+    }
+    const result = { dry_run: dryRun, total_rows: rowsSeen, products_changed: changedIds.size, counts, changes: changes.slice(0, 100), skipped: skipped.slice(0, 100), skipped_total: skipped.length };
+    if (!dryRun && changedIds.size) {
+      await logActivity(req, 'product_update', 'excel-import', 'catalog', `Excel import: updated ${changedIds.size} products (price: ${counts.price}, sale: ${counts.sale_price}, stock: ${counts.stock})`);
+    }
+    return res.json(result);
+  } catch (err) { return next(err); }
+});
+
 // Product photo upload (manager only). Body {image_data} is a data URL —
 // the frontend downscales to max 800px JPEG first, so uploads stay small.
 // Stored as bytes in the images table (not a data URL on the product), so
