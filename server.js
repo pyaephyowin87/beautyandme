@@ -2270,7 +2270,7 @@ app.use((err, _req, res, _next) => {
 store.init()
   .then(() => {
     if (!mailer.isMailConfigured()) {
-      console.log(`[mailer] WARNING: password-reset email is NOT configured (${mailer.mailerStatus()}) — set SENDGRID_API_KEY + MAIL_FROM_EMAIL in Render env; reset links will only be logged until then`);
+      console.log(`[mailer] WARNING: password-reset email is NOT configured (${mailer.mailerStatus()}) — set GMAIL_APP_PASSWORD + MAIL_FROM_EMAIL in Render env; reset links will only be logged until then`);
     }
     app.listen(PORT, () => {
       console.log(`Beauty & Me shop backend listening on port ${PORT} (store: ${store.backend})`);
