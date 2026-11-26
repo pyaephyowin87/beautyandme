@@ -21,6 +21,23 @@ const I18N = {
     wrong_password: 'လက်ရှိ Password မမှန်ပါ',
     forgot_password: 'Password မေ့သွားလား?',
     forgot_help: 'ဆိုင်ကို Messenger (သို့) ဖုန်း 09765117366 နဲ့ ဆက်သွယ်ပါ — ဝန်ထမ်းက Password အသစ် ပြန်ပေးပါမယ်။',
+    forgot_step1_title: 'Password ပြန်ယူမယ်',
+    forgot_step1_hint: 'အကောင့် ဖွင့်ထားတဲ့ ဖုန်း နဲ့ နာမည် ရိုက်ပါ',
+    forgot_continue: 'ဆက်သွားမယ်',
+    forgot_no_match: 'ဖုန်း နဲ့ နာမည် မကိုက်ညီပါ — ဆိုင်ကို ဆက်သွယ်ပြီး Password ပြန်ချိန်းပေးပါမယ်။',
+    forgot_call_shop: 'ဆိုင်ကို ဖုန်းဆက်မယ်',
+    forgot_send_link: 'Reset link ပို့မယ်',
+    forgot_send_to: 'ဒီ email ကို link ပို့ပေးပါမယ်:',
+    forgot_enter_email: 'Reset link ပို့ဖို့ email ရိုက်ပါ',
+    forgot_sent: 'Reset link ပို့ပေးပါပြီ — inbox (နဲ့ spam) စစ်ပါ။ Link က ၁ နာရီပဲ ခံပါတယ်။',
+    forgot_mail_off: 'Email ပို့တဲ့ စနစ် မချိတ်ရသေးပါ — Messenger (သို့) ဖုန်းနဲ့ ဆိုင်ကို ဆက်သွယ်ပါ။',
+    forgot_back: 'Login ပြန်သွားမယ်',
+    email_optional: 'Email (မဖြစ်မနေ မဟုတ်ပါ)',
+    email_saved: 'Email မှတ်ပေးပြီးပါပြီ',
+    invalid_email: 'Email မမှန်ပါ',
+    email_registered: 'ဒီ email ကို အကောင့် တစ်ခု သုံးထားပြီးပါပြီ',
+    phone_registered: 'ဒီ ဖုန်းနံပါတ်နဲ့ အကောင့် ဖွင့်ပြီးသားပါ',
+    too_many_attempts: 'အကြိမ်ရေ များနေပါတယ် — ခဏနေ ပြန်စမ်းပါ',
     view_coupons: 'Coupon များ ကြည့်မယ်', coupons_title: 'Coupon များ',
     use_coupon: 'သုံးမယ်', no_coupons_active: 'Coupon မရှိသေးပါ',
     percent_off: '% လျှော့', amount_off: 'Ks လျှော့',
@@ -153,6 +170,23 @@ const I18N = {
     wrong_password: 'Current password is incorrect',
     forgot_password: 'Forgot your password?',
     forgot_help: 'Contact the shop via Messenger or phone 09765117366 — staff will help you set a new password.',
+    forgot_step1_title: 'Reset your password',
+    forgot_step1_hint: 'Enter the phone and name on your account',
+    forgot_continue: 'Continue',
+    forgot_no_match: 'Phone and name do not match — contact the shop to reset your password.',
+    forgot_call_shop: 'Call the shop',
+    forgot_send_link: 'Send reset link',
+    forgot_send_to: 'We will send the link to this email:',
+    forgot_enter_email: 'Enter an email to receive the reset link',
+    forgot_sent: 'Reset link sent — check your inbox (and spam). The link expires in 1 hour.',
+    forgot_mail_off: 'Email sending is not set up yet — contact the shop via Messenger or phone.',
+    forgot_back: 'Back to login',
+    email_optional: 'Email (optional)',
+    email_saved: 'Email saved',
+    invalid_email: 'Invalid email',
+    email_registered: 'This email is already used by another account',
+    phone_registered: 'An account with this phone number already exists',
+    too_many_attempts: 'Too many attempts — try again later',
     view_coupons: 'View coupons', coupons_title: 'Coupons',
     use_coupon: 'Use', no_coupons_active: 'No coupons available',
     percent_off: '% off', amount_off: 'Ks off',
@@ -1230,6 +1264,7 @@ async function placeOrder() {
 let authMode = 'login';
 function openAuth() {
   authMode = 'login';
+  hideForgotPanel();
   setAuthTab('login');
   $('#authError').hidden = true;
   openOverlay('#authOverlay', '#authModal');
@@ -1239,6 +1274,8 @@ function setAuthTab(mode) {
   authMode = mode;
   $$('#authTabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.atab === mode));
   $('#authNameRow').hidden = mode !== 'register';
+  $('#authEmailRow').hidden = mode !== 'register';
+  $('#authForgotRow').hidden = mode !== 'login';
   $('#authTitle').textContent = mode === 'register' ? t('register') : t('login');
   $('#authSubmit').textContent = mode === 'register' ? t('register') : t('login');
 }
@@ -1248,15 +1285,19 @@ async function submitAuth() {
   const phone = $('#authPhone').value.trim();
   const password = $('#authPass').value;
   const name = $('#authName').value.trim();
+  const email = ($('#authEmail').value || '').trim();
   if (!phone || !password || (authMode === 'register' && !name)) {
     err.textContent = t('fill_all'); err.hidden = false; return;
+  }
+  if (authMode === 'register' && email && email.indexOf('@') === -1) {
+    err.textContent = t('invalid_email'); err.hidden = false; return;
   }
   const btn = $('#authSubmit');
   btn.disabled = true;
   try {
     const path = authMode === 'register' ? '/auth/register' : '/auth/login';
     const body = authMode === 'register'
-      ? { name: name, phone: phone, password: password }
+      ? { name: name, phone: phone, password: password, email: email || null }
       : { phone: phone, password: password };
     const res = await api(path, { method: 'POST', body: JSON.stringify(body) });
     if (res.token) {
@@ -1271,9 +1312,146 @@ async function submitAuth() {
     refreshAuthUI();
     toast(t('login') + ' ✓');
   } catch (e) {
-    err.textContent = t('auth_fail');
+    const code = e.data && e.data.error;
+    if (authMode === 'register' && code === 'email_registered') err.textContent = t('email_registered');
+    else if (authMode === 'register' && code === 'invalid_email') err.textContent = t('invalid_email');
+    else if (authMode === 'register' && code === 'phone_registered') err.textContent = t('phone_registered');
+    else if (authMode === 'register' && code === 'invalid_phone') err.textContent = t('invalid_phone');
+    else err.textContent = t('auth_fail');
     err.hidden = false;
   } finally { btn.disabled = false; }
+}
+
+/* ---------------- forgot password (fix-batch-26) ----------------
+   Flow (Pyae's design): step 1 verifies the registered phone + name.
+   Step 2 sends the reset link — ONLY to the email already on the account
+   (shown masked), or to a typed-in email when the account has none (which
+   is then saved to the account). A mismatch never reaches step 2; the
+   customer gets the call-the-shop / Messenger fallback instead. */
+let forgotState = null; // {phone, name, has_email, masked_email}
+function showForgotPanel() {
+  $$('#authModal .field').forEach((el) => { el.hidden = true; });
+  $('#authTabs').hidden = true;
+  $('#authSubmit').hidden = true;
+  $('#authForgotRow').hidden = true;
+  $('#authError').hidden = true;
+  $('#forgotPanel').hidden = false;
+  renderForgotStep1();
+}
+function hideForgotPanel() {
+  const panel = $('#forgotPanel');
+  if (panel) { panel.hidden = true; panel.innerHTML = ''; }
+  const tabs = $('#authTabs');
+  if (tabs) tabs.hidden = false;
+  $$('#authModal .field').forEach((el) => { el.hidden = false; });
+  const submit = $('#authSubmit');
+  if (submit) submit.hidden = false;
+  forgotState = null;
+  setAuthTab(authMode);
+}
+function renderForgotStep1() {
+  const p = $('#forgotPanel');
+  p.innerHTML =
+    '<h3 style="margin:4px 0 6px">' + esc(t('forgot_step1_title')) + '</h3>' +
+    '<p class="hint">' + esc(t('forgot_step1_hint')) + '</p>' +
+    '<div class="field"><label>' + esc(t('phone')) + '</label><input id="fgPhone" type="tel" autocomplete="tel" placeholder="09xxxxxxxxx"></div>' +
+    '<div class="field"><label>' + esc(t('name')) + '</label><input id="fgName" type="text" autocomplete="name"></div>' +
+    '<div id="fgErr" class="error-text" hidden></div>' +
+    '<button class="btn btn-primary btn-block" type="button" id="fgNextBtn">' + esc(t('forgot_continue')) + '</button>' +
+    '<div class="center" style="margin-top:12px"><button class="btn btn-ghost" type="button" id="fgBackBtn">' + esc(t('forgot_back')) + '</button></div>';
+  $('#fgBackBtn').addEventListener('click', hideForgotPanel);
+  $('#fgNextBtn').addEventListener('click', submitForgotVerify);
+}
+async function submitForgotVerify() {
+  const err = $('#fgErr');
+  err.hidden = true;
+  const phone = $('#fgPhone').value.trim();
+  const name = $('#fgName').value.trim();
+  if (!phone || !name) { err.textContent = t('fill_all'); err.hidden = false; return; }
+  const btn = $('#fgNextBtn');
+  btn.disabled = true;
+  try {
+    const res = await api('/auth/forgot-verify', { method: 'POST', body: JSON.stringify({ phone, name }) });
+    if (!res.ok) { renderForgotNoMatch(); return; }
+    forgotState = { phone, name, has_email: res.has_email, masked_email: res.masked_email };
+    renderForgotStep2();
+  } catch (e) {
+    err.textContent = (e.status === 429) ? t('too_many_attempts') : t('error_load');
+    err.hidden = false;
+  } finally { btn.disabled = false; }
+}
+function forgotFallbackHtml() {
+  return '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">' +
+    '<a class="btn btn-primary" href="tel:09765117366">' + esc(t('forgot_call_shop')) + '</a>' +
+    '<a class="btn btn-outline" href="https://m.me/beautyandme117" target="_blank" rel="noopener">Messenger</a>' +
+    '</div>';
+}
+function renderForgotNoMatch() {
+  const p = $('#forgotPanel');
+  p.innerHTML =
+    '<p class="hint">' + esc(t('forgot_no_match')) + '</p>' +
+    forgotFallbackHtml() +
+    '<div class="center" style="margin-top:12px"><button class="btn btn-ghost" type="button" id="fgBackBtn2">' + esc(t('forgot_back')) + '</button></div>';
+  $('#fgBackBtn2').addEventListener('click', hideForgotPanel);
+}
+function renderForgotStep2() {
+  const p = $('#forgotPanel');
+  const st = forgotState;
+  let body = '';
+  if (st.has_email) {
+    body = '<p class="hint">' + esc(t('forgot_send_to')) + '</p>' +
+      '<p style="font-weight:bold;text-align:center">' + esc(st.masked_email) + '</p>';
+  } else {
+    body = '<p class="hint">' + esc(t('forgot_enter_email')) + '</p>' +
+      '<div class="field"><label>Email</label><input id="fgEmail" type="email" autocomplete="email" placeholder="example@gmail.com"></div>';
+  }
+  p.innerHTML =
+    '<h3 style="margin:4px 0 6px">' + esc(t('forgot_step1_title')) + '</h3>' + body +
+    '<div id="fgErr2" class="error-text" hidden></div>' +
+    '<button class="btn btn-primary btn-block" type="button" id="fgSendBtn">' + esc(t('forgot_send_link')) + '</button>' +
+    '<div class="center" style="margin-top:12px"><button class="btn btn-ghost" type="button" id="fgBackBtn3">' + esc(t('forgot_back')) + '</button></div>';
+  $('#fgBackBtn3').addEventListener('click', hideForgotPanel);
+  $('#fgSendBtn').addEventListener('click', submitForgotSend);
+}
+async function submitForgotSend() {
+  const err = $('#fgErr2');
+  err.hidden = true;
+  const st = forgotState;
+  let email = null;
+  if (!st.has_email) {
+    email = ($('#fgEmail').value || '').trim();
+    if (!email || email.indexOf('@') === -1) { err.textContent = t('invalid_email'); err.hidden = false; return; }
+  }
+  const btn = $('#fgSendBtn');
+  btn.disabled = true;
+  try {
+    const res = await api('/auth/forgot-send', { method: 'POST', body: JSON.stringify({ phone: st.phone, name: st.name, email }) });
+    if (!res.mail_configured) { renderForgotMailOff(); return; }
+    renderForgotSent(res.masked_email);
+  } catch (e) {
+    const code = e.data && e.data.error;
+    if (e.status === 429) err.textContent = t('too_many_attempts');
+    else if (code === 'email_registered') err.textContent = t('email_registered');
+    else if (code === 'invalid_email') err.textContent = t('invalid_email');
+    else err.textContent = t('error_load');
+    err.hidden = false;
+  } finally { btn.disabled = false; }
+}
+function renderForgotSent(masked) {
+  const p = $('#forgotPanel');
+  p.innerHTML =
+    '<p class="hint">' + esc(t('forgot_sent')) + '</p>' +
+    (masked ? '<p style="font-weight:bold;text-align:center">' + esc(masked) + '</p>' : '') +
+    '<div class="center" style="margin-top:12px"><button class="btn btn-ghost" type="button" id="fgBackBtn4">' + esc(t('forgot_back')) + '</button></div>';
+  $('#fgBackBtn4').addEventListener('click', hideForgotPanel);
+}
+function renderForgotMailOff() {
+  const p = $('#forgotPanel');
+  p.innerHTML =
+    '<p class="hint">' + esc(t('forgot_mail_off')) + '</p>' +
+    forgotFallbackHtml() +
+    '<div class="center" style="margin-top:12px"><button class="btn btn-ghost" type="button" id="fgBackBtn5">' + esc(t('forgot_back')) + '</button></div>';
+  $('#fgBackBtn5').addEventListener('click', hideForgotPanel);
 }
 function logout() {
   state.token = null;
@@ -1321,6 +1499,10 @@ function renderAccount() {
     '<div class="checkout-card">' +
     '<div class="kv-row"><span>' + esc(t('name')) + '</span><strong>' + esc(u.name || '') + '</strong></div>' +
     '<div class="kv-row"><span>' + esc(t('phone')) + '</span><strong>' + esc(u.phone || '') + '</strong></div>' +
+    '<div class="kv-row"><span>Email</span><strong>' + esc(u.email || '—') + '</strong></div>' +
+    '<div class="field" style="margin-top:12px"><label>Email (' + esc(t('email_optional')) + ')</label><input id="acctEmail" type="email" value="' + esc(u.email || '') + '" placeholder="example@gmail.com"></div>' +
+    '<div id="acctEmailMsg" class="error-text" hidden></div>' +
+    '<button class="btn btn-outline" type="button" id="acctEmailBtn">' + esc(t('save')) + '</button>' +
     '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">' +
     '<button class="btn btn-outline" type="button" id="accountOrdersBtn">' + esc(t('my_orders')) + '</button>' +
     '<button class="btn btn-outline" type="button" id="accountLogoutBtn">' + esc(t('logout')) + '</button>' +
@@ -1338,7 +1520,26 @@ function renderAccount() {
     '</div>';
   $('#accountOrdersBtn').addEventListener('click', () => showView('orders'));
   $('#accountLogoutBtn').addEventListener('click', () => { if (window.confirm(t('logout') + '?')) logout(); });
+  $('#acctEmailBtn').addEventListener('click', saveAccountEmail);
   $('#pwChangeBtn').addEventListener('click', changePassword);
+}
+async function saveAccountEmail() {
+  const msg = $('#acctEmailMsg');
+  msg.hidden = true;
+  const email = ($('#acctEmail').value || '').trim();
+  const btn = $('#acctEmailBtn');
+  btn.disabled = true;
+  try {
+    const res = await api('/me/email', { method: 'POST', body: JSON.stringify({ email }) });
+    state.user = res.user || state.user;
+    msg.hidden = false; msg.style.color = 'var(--green)'; msg.textContent = t('email_saved');
+    toast(t('email_saved'));
+  } catch (e) {
+    const code = e.data && e.data.error;
+    msg.style.color = '';
+    msg.textContent = code === 'email_registered' ? t('email_registered') : code === 'invalid_email' ? t('invalid_email') : t('error_load');
+    msg.hidden = false;
+  } finally { btn.disabled = false; }
 }
 async function changePassword() {
   const msg = $('#pwMsg');
@@ -2850,6 +3051,7 @@ function wire() {
   $('#authOverlay').addEventListener('click', (ev) => { if (ev.target === $('#authOverlay')) closeAuth(); });
   $$('#authTabs .tab').forEach((b) => b.addEventListener('click', () => setAuthTab(b.dataset.atab)));
   $('#authSubmit').addEventListener('click', submitAuth);
+  $('#authForgotLink').addEventListener('click', showForgotPanel);
   $('#authPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAuth(); });
   $('#detailClose').addEventListener('click', () => closeOverlay('#detailOverlay', '#detailModal'));
   $('#detailOverlay').addEventListener('click', (ev) => { if (ev.target === $('#detailOverlay')) closeOverlay('#detailOverlay', '#detailModal'); });
