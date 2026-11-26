@@ -27,6 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
 const store = require('./lib/store');
+const mailer = require('./lib/mailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,6 +52,42 @@ function isValidMyanmarPhone(phone) {
   return /^09\d{7,9}$/.test(phone);
 }
 
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+}
+
+// Names are matched loosely for forgot-password: case and extra spaces
+// don't matter ("Pyae Phyo Win" == "pyae  phyo win"). Myanmar script has
+// no case, so toLowerCase() is a no-op there — harmless.
+function normalizeName(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Show just enough of an email to recognise it: pyae@gmail.com -> p***@gmail.com
+function maskEmail(email) {
+  const e = String(email || '');
+  const at = e.indexOf('@');
+  if (at <= 0) return '***';
+  return e[0] + '***' + e.slice(at);
+}
+
+// Forgot-password abuse guard (in-memory; fail-open on restart — the
+// phone+name check itself is the real gate). 5 verifies / 3 sends per
+// phone per hour; an attacker guessing names can't hammer one number.
+const forgotLimits = new Map();
+function forgotAllowed(phone, kind, max) {
+  const now = Date.now();
+  const key = kind + ':' + phone;
+  const rec = forgotLimits.get(key);
+  if (!rec || now - rec.started > 60 * 60 * 1000) {
+    forgotLimits.set(key, { count: 1, started: now });
+    return true;
+  }
+  if (rec.count >= max) return false;
+  rec.count += 1;
+  return true;
+}
+
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -69,7 +106,7 @@ function newToken() {
 }
 
 async function publicUser(user) {
-  return { id: user.id, name: user.name, phone: user.phone, is_manager: await isManagerPhone(user.phone), is_sale_staff: await isSaleStaffPhone(user.phone), is_owner: user.phone === MANAGER_PHONE };
+  return { id: user.id, name: user.name, phone: user.phone, email: user.email || null, is_manager: await isManagerPhone(user.phone), is_sale_staff: await isSaleStaffPhone(user.phone), is_owner: user.phone === MANAGER_PHONE };
 }
 
 // Product type, derived from the product name. The POS category field is
@@ -379,11 +416,21 @@ app.get('/api/brands', async (_req, res, next) => {
 
 app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const { name, phone, password } = req.body || {};
+    const { name, phone, password, email } = req.body || {};
     const cleanPhone = normalizePhone(phone);
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'name_required' });
     if (!isValidMyanmarPhone(cleanPhone)) return res.status(400).json({ error: 'invalid_phone' });
     if (!password || String(password).length < 4) return res.status(400).json({ error: 'password_too_short' });
+    // Email is OPTIONAL at registration — but when given it must be valid
+    // and not already used by another account (it is the password-reset
+    // channel, so two accounts can't share one).
+    let cleanEmail = null;
+    if (email != null && String(email).trim() !== '') {
+      cleanEmail = String(email).trim().toLowerCase();
+      if (!isValidEmail(cleanEmail)) return res.status(400).json({ error: 'invalid_email' });
+      const clash = (await store.listUsers()).find((u) => u.email && String(u.email).toLowerCase() === cleanEmail);
+      if (clash) return res.status(400).json({ error: 'email_registered' });
+    }
     const existing = await store.getUserByPhone(cleanPhone);
     if (existing) return res.status(400).json({ error: 'phone_registered' });
 
@@ -392,6 +439,7 @@ app.post('/api/auth/register', async (req, res, next) => {
       id: crypto.randomBytes(8).toString('hex'),
       name: String(name).trim(),
       phone: cleanPhone,
+      email: cleanEmail,
       password_hash: hashPassword(String(password)),
       is_manager: cleanPhone === MANAGER_PHONE,
       token,
@@ -430,6 +478,112 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res, next) => 
     req.user.password_hash = hashPassword(String(new_password));
     await store.saveUser(req.user);
     return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
+// ---------- Forgot password (fix-batch-26, Pyae's flow) ----------
+// Step 1 — customer proves who they are with the phone + name they
+// registered with. No email is asked yet, because email was optional at
+// registration. A wrong pair returns ok:false (same HTTP 200 — never reveal
+// whether a phone number has an account), and the frontend shows the
+// call-the-shop fallback instead of the email step.
+app.post('/api/auth/forgot-verify', async (req, res, next) => {
+  try {
+    const { phone, name } = req.body || {};
+    const cleanPhone = normalizePhone(phone);
+    if (!forgotAllowed(cleanPhone || 'unknown', 'verify', 5)) {
+      return res.status(429).json({ error: 'too_many_attempts' });
+    }
+    const user = await store.getUserByPhone(cleanPhone);
+    const match = user && normalizeName(user.name) === normalizeName(name);
+    if (!match) return res.json({ ok: false });
+    return res.json({ ok: true, has_email: Boolean(user.email), masked_email: user.email ? maskEmail(user.email) : null });
+  } catch (err) { return next(err); }
+});
+
+// Step 2 — send the reset link. The phone+name check runs AGAIN here so
+// step 2 can't be reached by skipping step 1. The link goes ONLY to the
+// email already on the account when there is one — a typed-in address is
+// accepted only when the account has no email yet, and it is then saved to
+// the account. That way nobody who merely knows a phone+name can redirect
+// a reset link to their own inbox and steal the account.
+app.post('/api/auth/forgot-send', async (req, res, next) => {
+  try {
+    const { phone, name, email } = req.body || {};
+    const cleanPhone = normalizePhone(phone);
+    if (!forgotAllowed(cleanPhone || 'unknown', 'send', 3)) {
+      return res.status(429).json({ error: 'too_many_attempts' });
+    }
+    const user = await store.getUserByPhone(cleanPhone);
+    const match = user && normalizeName(user.name) === normalizeName(name);
+    if (!match) return res.status(400).json({ error: 'no_match' });
+
+    let targetEmail = user.email ? String(user.email).toLowerCase() : null;
+    if (!targetEmail) {
+      if (!email || !isValidEmail(email)) return res.status(400).json({ error: 'invalid_email' });
+      targetEmail = String(email).trim().toLowerCase();
+      const clash = (await store.listUsers()).find((u) => u.phone !== cleanPhone && u.email && String(u.email).toLowerCase() === targetEmail);
+      if (clash) return res.status(400).json({ error: 'email_registered' });
+      user.email = targetEmail;
+      await store.saveUser(user);
+    }
+
+    const raw = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+    await store.saveResetToken({
+      token_hash: tokenHash,
+      phone: cleanPhone,
+      email: targetEmail,
+      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      created_at: new Date().toISOString(),
+    });
+    const proto = req.get('x-forwarded-proto') || req.protocol;
+    const resetUrl = `${proto}://${req.get('host')}/reset.html?token=${raw}`;
+    const result = await mailer.sendResetEmail({ to: targetEmail, name: user.name, resetUrl });
+    return res.json({ ok: true, mail_configured: result.sent, masked_email: maskEmail(targetEmail) });
+  } catch (err) { return next(err); }
+});
+
+// Step 3 — use the link: set a new password. Token is one-time use and
+// expires after 1 hour; the raw token is never stored, only its hash.
+app.post('/api/auth/reset-password', async (req, res, next) => {
+  try {
+    const { token, password } = req.body || {};
+    if (!password || String(password).length < 4) return res.status(400).json({ error: 'password_too_short' });
+    if (!token) return res.status(400).json({ error: 'invalid_token' });
+    const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
+    const rec = await store.getResetToken(tokenHash);
+    if (!rec || new Date(rec.expires_at).getTime() < Date.now()) {
+      if (rec) await store.deleteResetToken(tokenHash);
+      return res.status(400).json({ error: 'invalid_token' });
+    }
+    const user = await store.getUserByPhone(rec.phone);
+    if (!user) {
+      await store.deleteResetToken(tokenHash);
+      return res.status(400).json({ error: 'invalid_token' });
+    }
+    user.password_hash = hashPassword(String(password));
+    await store.saveUser(user);
+    await store.deleteResetToken(tokenHash);
+    return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
+// Logged-in customer adds or changes their own email (My Account). Same
+// uniqueness rule as registration; empty clears it.
+app.post('/api/me/email', authMiddleware, async (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    let cleanEmail = null;
+    if (email != null && String(email).trim() !== '') {
+      cleanEmail = String(email).trim().toLowerCase();
+      if (!isValidEmail(cleanEmail)) return res.status(400).json({ error: 'invalid_email' });
+      const clash = (await store.listUsers()).find((u) => u.phone !== req.user.phone && u.email && String(u.email).toLowerCase() === cleanEmail);
+      if (clash) return res.status(400).json({ error: 'email_registered' });
+    }
+    req.user.email = cleanEmail;
+    await store.saveUser(req.user);
+    return res.json({ user: await publicUser(req.user) });
   } catch (err) { return next(err); }
 });
 
@@ -2115,6 +2269,9 @@ app.use((err, _req, res, _next) => {
 
 store.init()
   .then(() => {
+    if (!mailer.isMailConfigured()) {
+      console.log(`[mailer] WARNING: password-reset email is NOT configured (${mailer.mailerStatus()}) — set SENDGRID_API_KEY + MAIL_FROM_EMAIL in Render env; reset links will only be logged until then`);
+    }
     app.listen(PORT, () => {
       console.log(`Beauty & Me shop backend listening on port ${PORT} (store: ${store.backend})`);
     });
