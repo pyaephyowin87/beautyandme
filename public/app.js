@@ -122,6 +122,8 @@ const I18N = {
     mig_removed: 'ဖြုတ်ပြီးပါပြီ',
     action_image_migrate: 'ပုံတွေ ဆိုင်ထဲ ရွှေ့တယ်',
     products: 'ပစ္စည်းများ', orders: 'အော်ဒါများ', sales: 'ရောင်းအား', customers: 'ဝယ်သူများ',
+    period_today: 'ဒီနေ့', period_week: 'ဒီအပတ်', period_month: 'ဒီလ', period_all: 'အားလုံး',
+    avg_order: 'တစ်အော်ဒါ ပျမ်းမျှ', pending_orders: 'စောင့်နေတဲ့ အော်ဒါ',
     fill_all: 'အချက်အလက် အကုန် ဖြည့်ပါ', invalid_phone: 'ဖုန်း နံပါတ် မမှန်ပါ',
     coupon_code: 'Coupon code', coupon_type: 'အမျိုးအစား', coupon_value: 'တန်ဖိုး',
     percent: 'ရာခိုင်နှုန်း (%)', fixed: 'သတ်မှတ် ငွေ (Ks)',
@@ -283,6 +285,8 @@ const I18N = {
     mig_removed: 'Removed',
     action_image_migrate: 'Moved photos into the shop',
     products: 'Products', orders: 'Orders', sales: 'Sales', customers: 'Customers',
+    period_today: 'Today', period_week: 'This week', period_month: 'This month', period_all: 'All',
+    avg_order: 'Avg per order', pending_orders: 'Pending orders',
     fill_all: 'Please fill in all fields', invalid_phone: 'Invalid phone number',
     coupon_code: 'Coupon code', coupon_type: 'Type', coupon_value: 'Value',
     percent: 'Percent (%)', fixed: 'Fixed amount (Ks)',
@@ -2236,22 +2240,38 @@ async function loadMgActivity(reset) {
   }
 }
 
+let mgDashPeriod = 'today';
 async function renderManageDashboard(body) {
-  body.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
-  try {
-    const s = await api('/manage/stats');
-    const entries = Object.entries(s || {});
-    if (!entries.length) { body.innerHTML = '<div class="empty">' + esc(t('empty')) + '</div>'; return; }
-    const labelFor = (k) => {
-      const map = { orders_count: t('orders'), total_sales: t('sales'), products_count: t('products'), customers_count: t('customers') };
-      return map[k] || k.replace(/_/g, ' ');
-    };
-    const valFor = (k, v) => (String(k).indexOf('sales') !== -1 || String(k).indexOf('revenue') !== -1 || String(k).indexOf('total') !== -1) && typeof v === 'number' ? fmt(v) : esc(String(v));
-    body.innerHTML = '<div class="stat-grid">' + entries.map(([k, v]) =>
-      '<div class="stat"><div class="num">' + valFor(k, v) + '</div><div class="lbl">' + esc(labelFor(k)) + '</div></div>').join('') + '</div>';
-  } catch (e) {
-    body.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
-  }
+  body.innerHTML =
+    '<div class="chips" id="mgDashChips">' +
+    ['today', 'week', 'month', 'all'].map((p) =>
+      '<button type="button" class="chip' + (mgDashPeriod === p ? ' active' : '') + '" data-dashperiod="' + p + '">' + esc(t('period_' + p)) + '</button>').join('') +
+    '</div><div id="mgDashStats" style="margin-top:12px"><div class="loading">' + esc(t('loading')) + '</div></div>';
+  const load = async () => {
+    const box = $('#mgDashStats');
+    try {
+      const s = await api('/manage/stats?period=' + mgDashPeriod);
+      const card = (num, lbl) => '<div class="stat"><div class="num">' + num + '</div><div class="lbl">' + esc(lbl) + '</div></div>';
+      box.innerHTML =
+        '<div class="stat-grid">' +
+        card(esc(String(s.orders || 0)), t('orders')) +
+        card(fmt(s.revenue || 0), t('sales')) +
+        card(fmt(s.avg_order || 0), t('avg_order')) +
+        card(esc(String(s.pending || 0)), t('pending_orders')) +
+        '</div><div class="stat-grid" style="margin-top:12px">' +
+        card(esc(String(s.products || 0)), t('products')) +
+        card(esc(String(s.users || 0)), t('customers')) +
+        '</div>';
+    } catch (e) {
+      box.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+    }
+  };
+  $$('#mgDashChips .chip').forEach((chip) => chip.addEventListener('click', () => {
+    mgDashPeriod = chip.getAttribute('data-dashperiod');
+    $$('#mgDashChips .chip').forEach((c) => c.classList.toggle('active', c === chip));
+    load();
+  }));
+  await load();
 }
 let mgCatalog = { q: '', offset: 0, items: [] };
 async function renderManageCatalog(body) {
