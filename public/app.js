@@ -2326,7 +2326,11 @@ async function renderRenamePanel() {
           state.brands = []; state.categories = [];
           loadBrands(); loadMgCatalog(true);
         } catch (e) {
-          result.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+          // Show the REAL error (HTTP status + server message, or the
+          // timeout message) instead of the generic line — a rename that
+          // fails live needs its cause visible, not hidden.
+          const detail = (e && e.status) ? ('HTTP ' + e.status + ' — ' + (e.message || t('error_load'))) : (e && e.message ? e.message : t('error_load'));
+          result.innerHTML = '<div class="error-box">' + esc(detail) + '</div>';
         }
       });
     };
