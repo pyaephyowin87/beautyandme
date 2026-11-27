@@ -1343,6 +1343,7 @@ async function submitAuth() {
     }
     closeAuth();
     refreshAuthUI();
+    registerPushToken();
     toast(t('login') + ' ✓');
   } catch (e) {
     const code = e.data && e.data.error;
@@ -3144,6 +3145,38 @@ function wire() {
   });
 }
 
+/* ---------------- push notifications (fix-batch-29, staff order alerts) ----------------
+   Runs ONLY inside the Capacitor app: the shop website in a normal browser
+   has no window.Capacitor, so this is a no-op there. When the native app
+   is present, ask for push permission, register with FCM and send the
+   device token to the shop server (only while logged in). Every failure
+   is swallowed silently — push must never break the shop.
+   Token delivery uses the normal api() (with its auto-retry), and the
+   server upserts by token, so re-registering is harmless. */
+let pushRegistered = false;
+async function registerPushToken() {
+  try {
+    if (pushRegistered || !state.token) return;
+    const cap = typeof window !== 'undefined' ? window.Capacitor : null;
+    const PN = cap && cap.Plugins && cap.Plugins.PushNotifications;
+    if (!PN) return;
+    const platform = (cap.getPlatform && cap.getPlatform()) || 'android';
+    if (platform !== 'android' && platform !== 'ios') return;
+    pushRegistered = true; // one registration attempt per page load
+    const perm = await PN.requestPermissions();
+    if (!perm || perm.receive !== 'granted') return;
+    PN.addListener('registration', async (reg) => {
+      try {
+        if (reg && reg.value) {
+          await api('/devices/register', { method: 'POST', body: JSON.stringify({ token: reg.value, platform }) });
+        }
+      } catch (e) { /* token delivery must never break the shop */ }
+    });
+    PN.addListener('registrationError', () => {});
+    await PN.register();
+  } catch (e) { /* push unavailable — shop works exactly as before */ }
+}
+
 async function init() {
   wire();
   applyI18n();
@@ -3151,6 +3184,7 @@ async function init() {
   updateWishlistBadge();
   renderCart();
   await restoreSession();
+  registerPushToken();
   await loadShopInfo();
   await loadBrands();
   await loadTypes();
