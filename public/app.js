@@ -829,8 +829,10 @@ async function loadHomeGrid(reset) {
     $('#homeMoreBtn').style.display = (data.total != null && state.homeOffset < data.total) ? '' : 'none';
     $('#homeMoreWrap').style.display = $('#homeMoreBtn').style.display === 'none' ? 'none' : '';
     updateHomeMeta(data.total != null ? data.total : items.length);
+    hideSplash();
   } catch (e) {
     if (reset) grid.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+    hideSplash();
   }
 }
 function homeFiltered() {
@@ -3463,6 +3465,20 @@ async function renderManageDevices(body) {
   }
 }
 
+// Native splash (Capacitor app only): hide once the shop has rendered, so the
+// splash stays up while Render wakes instead of a long white screen. No-op in
+// a normal browser (window.Capacitor is undefined there). Safety timeout hides
+// it after 20s no matter what, so it can never stick forever.
+let splashHidden = false;
+function hideSplash() {
+  if (splashHidden) return;
+  splashHidden = true;
+  try {
+    const ss = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen;
+    if (ss && ss.hide) { const p = ss.hide(); if (p && p.catch) p.catch(function(){}); }
+  } catch (e) {}
+}
+setTimeout(hideSplash, 20000);
 async function init() {
   wire();
   applyI18n();
