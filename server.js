@@ -588,12 +588,8 @@ async function renameCatalogValue(req, res, kind) {
   if (!cleanFrom || !cleanTo) return res.status(400).json({ error: 'name_required' });
   if (cleanFrom === cleanTo) return res.status(400).json({ error: 'same_name' });
   const products = await store.listProducts();
-  const hit = products.filter((p) => String(kind === 'brand' ? p.brand || '' : p.category || '') === cleanFrom);
-  if (!hit.length) return res.status(404).json({ error: 'not_found' });
-  for (const p of hit) {
-    if (kind === 'brand') p.brand = cleanTo; else p.category = cleanTo;
-    await store.saveProduct(p);
-  }
+  const changed = await store.renameProductField(kind, cleanFrom, cleanTo);
+  if (!changed) return res.status(404).json({ error: 'not_found' });
   let couponsUpdated = 0;
   if (kind === 'brand') {
     for (const c of await store.listCoupons()) {
@@ -605,8 +601,8 @@ async function renameCatalogValue(req, res, kind) {
     }
   }
   await logActivity(req, kind === 'brand' ? 'product_brand_rename' : 'product_category_rename',
-    kind, cleanFrom, `${kind}: ${cleanFrom} → ${cleanTo} (${hit.length} products${couponsUpdated ? `, ${couponsUpdated} coupons` : ''})`);
-  return res.json({ ok: true, changed: hit.length, coupons_updated: couponsUpdated });
+    kind, cleanFrom, `${kind}: ${cleanFrom} → ${cleanTo} (${changed} products${couponsUpdated ? `, ${couponsUpdated} coupons` : ''})`);
+  return res.json({ ok: true, changed, coupons_updated: couponsUpdated });
 }
 app.post('/api/manage/brands/rename', authMiddleware, managerMiddleware, async (req, res, next) => {
   try { return await renameCatalogValue(req, res, 'brand'); } catch (err) { return next(err); }
