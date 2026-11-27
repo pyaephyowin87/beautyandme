@@ -518,9 +518,7 @@ app.get('/api/types', async (_req, res, next) => {
     }
     const out = PRODUCT_TYPE_ORDER
       .filter((t) => counts[t])
-      .map((t) => ({ type: t, label: PRODUCT_TYPE_LABELS[t], count: counts[t] }))
-      // Type chips read A–Z by their display label (fix-batch-42).
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .map((t) => ({ type: t, label: PRODUCT_TYPE_LABELS[t], count: counts[t] }));
     return res.json(out);
   } catch (err) { return next(err); }
 });
@@ -538,9 +536,7 @@ app.get('/api/categories', async (_req, res, next) => {
       counts[t] = (counts[t] || 0) + 1;
     }
     const out = PRODUCT_TYPE_ORDER
-      .map((t) => ({ type: t, label: PRODUCT_TYPE_LABELS[t], count: counts[t] || 0 }))
-      // Same A–Z label order as the type chips (fix-batch-42).
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .map((t) => ({ type: t, label: PRODUCT_TYPE_LABELS[t], count: counts[t] || 0 }));
     return res.json(out);
   } catch (err) { return next(err); }
 });
