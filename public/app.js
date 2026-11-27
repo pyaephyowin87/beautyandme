@@ -54,7 +54,7 @@ const I18N = {
     in_stock: 'Stock ရှိပါတယ်', out_stock: 'ကုန်ပြီ',
     no_image: 'ပုံ မရှိသေးပါ',
     add_cart: 'Cart ထဲ ထည့်မယ်', added: 'ခြင်းတောင်းထဲ ထည့်ပြီးပါပြီ',
-    loading: 'တင်နေပါတယ်…', empty: 'ပစ္စည်းမရှိသေးပါ', error_load: 'တင်မရပါ။ ပြန်ကြိုးစားကြည့်ပါ။',
+    loading: 'တင်နေပါတယ်…', empty: 'ပစ္စည်းမရှိသေးပါ', error_load: 'တင်မရပါ။ ပြန်ကြိုးစားကြည့်ပါ။', server_waking: 'ဆာဗာ နိုးနေပါတယ် — ခဏစောင့်ပါ…',
     subtotal: 'Subtotal', discount: 'လျှော့ဈေး', total: 'Total',
     checkout: 'ငွေချေမယ်', cart_empty: 'ခြင်းတောင်းထဲ ပစ္စည်း မရှိသေးပါ',
     coupon_applied: 'Coupon သုံးပြီးပါပြီ', coupon_invalid: 'Coupon မမှန်ပါ',
@@ -203,7 +203,7 @@ const I18N = {
     in_stock: 'In Stock', out_stock: 'Sold Out',
     no_image: 'No photo yet',
     add_cart: 'Add to Cart', added: 'Added to cart',
-    loading: 'Loading…', empty: 'No products yet', error_load: 'Could not load. Please try again.',
+    loading: 'Loading…', empty: 'No products yet', error_load: 'Could not load. Please try again.', server_waking: 'Waking up the server — please wait…',
     subtotal: 'Subtotal', discount: 'Discount', total: 'Total',
     checkout: 'Checkout', cart_empty: 'Your cart is empty',
     coupon_applied: 'Coupon applied', coupon_invalid: 'Invalid coupon',
@@ -362,34 +362,67 @@ function saveCoupon() {
   if (state.coupon) localStorage.setItem('bm_coupon', JSON.stringify(state.coupon));
   else localStorage.removeItem('bm_coupon');
 }
+// fix-batch-28: Render free tier sleeps after 15 min idle. The first request
+// after sleep either gets a 502/503 from the proxy or hangs while the
+// instance boots, so the old single-fetch api() failed with "Could not load"
+// and Pyae had to tap twice. api() now retries transient failures itself:
+// up to 4 attempts, 25s per attempt, backoff 3s/6s/10s. It retries network
+// errors and 502/503/504 only — never 4xx (400/401/429 are real answers).
+// POSTs are retried only when the failure proves the app never ran the
+// handler (proxy 502/503/504, or a connection that failed fast); a POST that
+// hung until the per-attempt timeout is NOT retried, so an order can never
+// be placed twice by a retry. While retrying, a toast tells the user the
+// server is waking up instead of showing an error.
+const API_RETRY = { attempts: 4, timeoutMs: 25000, delays: [3000, 6000, 10000] };
 async function api(path, opts) {
   const o = Object.assign({ headers: {} }, opts || {});
   o.headers['Content-Type'] = 'application/json';
   if (state.token) o.headers['Authorization'] = 'Bearer ' + state.token;
-  const res = await fetch('/api' + path, o);
-  let data = null;
-  try { data = await res.json(); } catch (e) { data = null; }
-  if (!res.ok) {
-    const err = new Error((data && data.error) || ('HTTP ' + res.status));
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-  return data;
-}
-// Same as api(), but retries a few times when the hosting proxy briefly
-// answers with an HTML error page instead of JSON (free-tier wake-ups /
-// restarts). A failed attempt is retried; a real JSON error is not.
-async function apiRetry(path, opts, tries) {
+  const method = (o.method || 'GET').toUpperCase();
+  const timeoutMs = o.timeoutMs || API_RETRY.timeoutMs;
+  const delays = o.retryDelays || API_RETRY.delays;
+  const maxAttempts = o.retryAttempts || API_RETRY.attempts;
+  const fo = Object.assign({}, o);
+  delete fo.timeoutMs; delete fo.retryDelays; delete fo.retryAttempts;
   let lastErr = null;
-  for (let attempt = 1; attempt <= (tries || 3); attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const started = Date.now();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      return await api(path, opts);
+      const res = await fetch('/api' + path, Object.assign({}, fo, { signal: ctrl.signal }));
+      clearTimeout(timer);
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (!res.ok) {
+        const err = new Error((data && data.error) || ('HTTP ' + res.status));
+        err.status = res.status;
+        err.data = data;
+        if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt < maxAttempts) {
+          toast(t('server_waking'));
+          await new Promise((r) => setTimeout(r, delays[attempt - 1] || 10000));
+          continue;
+        }
+        throw err;
+      }
+      return data;
     } catch (e) {
+      clearTimeout(timer);
+      if (e.status) throw e; // real HTTP error (4xx, or 5xx after last attempt)
+      // Network error / abort: retry unless this was a POST that may already
+      // have reached the server, or attempts are exhausted. A timeout abort
+      // means we waited the whole attempt with no response — the request may
+      // have run — so POSTs never retry after an abort, however short the
+      // timeout was. A fast connection failure (refused/reset before any
+      // data could be sent) is safe to retry even for POSTs.
+      const elapsed = Date.now() - started;
+      const timedOut = e.name === 'AbortError';
+      const fastFail = !timedOut && elapsed < 3000;
+      const safeToRetry = method === 'GET' || fastFail;
       lastErr = e;
-      const transient = !e.status || e.message.indexOf('Unexpected token') === 0 || e.message.indexOf('<!DOCTYPE') !== -1;
-      if (!transient || attempt >= (tries || 3)) throw e;
-      await new Promise((r) => setTimeout(r, 3000));
+      if (!safeToRetry || attempt >= maxAttempts) throw e;
+      toast(t('server_waking'));
+      await new Promise((r) => setTimeout(r, delays[attempt - 1] || 10000));
     }
   }
   throw lastErr;
