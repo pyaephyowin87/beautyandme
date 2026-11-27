@@ -678,7 +678,7 @@ function cardHTML(p) {
     '<button type="button" class="wish-btn' + (wished ? ' active' : '') + '" data-wish="' + esc(String(p.id)) + '" aria-label="' + esc(t(wished ? 'wish_remove' : 'wish_add')) + '">' + (wished ? '♥' : '♡') + '</button></div>' +
     '<div class="card-body">' +
     '<span class="card-brand">' + esc(p.brand || '') + '</span>' +
-    '<button type="button" class="card-name" data-open="' + esc(String(p.id)) + '" style="background:none;border:none;padding:0;text-align:left;font:inherit;color:inherit">' + esc(p.name) + '</button>' +
+    '<button type="button" class="card-name" data-open="' + esc(String(p.id)) + '" style="background:none;border:none;padding:0;text-align:left;font:inherit;color:inherit"><span>' + esc(p.name) + '</span></button>' +
     '<span class="card-price" data-cardprice="' + esc(String(p.id)) + '">' + priceHTML + '</span>' +
     (hasOpts ? '<div class="card-opts">' + p.options.map((o) => '<button type="button" class="chip' + (o.label === selOpt.label ? ' active' : '') + '" data-opt="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" data-price="' + o.price + '"' + (o.in_stock ? '' : ' disabled') + '>' + esc(o.label) + '</button>').join('') + '</div>' : '') +
     '<span class="badge ' + (p.in_stock ? 'in' : 'out') + '">' + esc(p.in_stock ? t('in_stock') : t('out_stock')) + '</span>' +
