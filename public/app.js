@@ -122,6 +122,7 @@ const I18N = {
     mig_removed: 'ဖြုတ်ပြီးပါပြီ',
     action_image_migrate: 'ပုံတွေ ဆိုင်ထဲ ရွှေ့တယ်',
     products: 'ပစ္စည်းများ', orders: 'အော်ဒါများ', sales: 'ရောင်းအား', customers: 'ဝယ်သူများ',
+    rename_title: 'Brand / Category ပြင်မယ်', rename_new_name: 'နာမည် အသစ်', rename_btn: 'ပြင်မယ်', rename_done: 'ပြင်ပြီးပါပြီ',
     period_today: 'ဒီနေ့', period_week: 'ဒီအပတ်', period_month: 'ဒီလ', period_all: 'အားလုံး',
     avg_order: 'တစ်အော်ဒါ ပျမ်းမျှ', pending_orders: 'စောင့်နေတဲ့ အော်ဒါ',
     fill_all: 'အချက်အလက် အကုန် ဖြည့်ပါ', invalid_phone: 'ဖုန်း နံပါတ် မမှန်ပါ',
@@ -285,6 +286,7 @@ const I18N = {
     mig_removed: 'Removed',
     action_image_migrate: 'Moved photos into the shop',
     products: 'Products', orders: 'Orders', sales: 'Sales', customers: 'Customers',
+    rename_title: 'Rename brand / category', rename_new_name: 'New name', rename_btn: 'Rename', rename_done: 'Renamed',
     period_today: 'Today', period_week: 'This week', period_month: 'This month', period_all: 'All',
     avg_order: 'Avg per order', pending_orders: 'Pending orders',
     fill_all: 'Please fill in all fields', invalid_phone: 'Invalid phone number',
@@ -2274,6 +2276,66 @@ async function renderManageDashboard(body) {
   await load();
 }
 let mgCatalog = { q: '', offset: 0, items: [] };
+// --- Brand / category rename (fix-batch-41) ---
+// Renames a brand (or stored category) on EVERY product that carries it.
+// The panel lists each value with its product count; the server applies the
+// rename, updates coupon brand scoping, and logs one activity entry.
+async function renameCatalogValue(kind, from, to) {
+  return api('/manage/' + (kind === 'brand' ? 'brands' : 'categories') + '/rename', { method: 'POST', body: JSON.stringify({ from, to }) });
+}
+let mgRenameBrands = [], mgRenameCats = [];
+async function renderRenamePanel() {
+  const box = $('#mgRenamePanel');
+  if (!box) return;
+  box.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  try {
+    const [brands, cats] = await Promise.all([api('/brands'), api('/manage/category-values')]);
+    mgRenameBrands = brands || [];
+    mgRenameCats = cats || [];
+    const opts = (list) => list.map((v) => '<option value="' + esc(v.name) + '">' + esc(v.name) + ' (' + v.count + ')</option>').join('');
+    const row = (kind, list, labelKey) =>
+      '<div style="font-weight:700;margin-bottom:6px">' + esc(t(labelKey)) + '</div>' +
+      '<div class="row-flex">' +
+      '<select id="mgRename' + (kind === 'brand' ? 'Brand' : 'Cat') + 'From" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:120px">' + opts(list) + '</select>' +
+      '<input id="mgRename' + (kind === 'brand' ? 'Brand' : 'Cat') + 'To" type="text" placeholder="' + esc(t('rename_new_name')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:120px">' +
+      '<button class="btn btn-primary" type="button" id="mgRename' + (kind === 'brand' ? 'Brand' : 'Cat') + 'Btn">' + esc(t('rename_btn')) + '</button>' +
+      '</div>';
+    box.innerHTML =
+      '<div style="border:1.5px solid var(--line);border-radius:12px;padding:12px">' +
+      '<div style="font-weight:800;font-size:15px;margin-bottom:10px">' + esc(t('rename_title')) + '</div>' +
+      row('brand', mgRenameBrands, 'brand') +
+      '<div style="height:10px"></div>' +
+      row('category', mgRenameCats, 'category') +
+      '<div id="mgRenameResult" style="margin-top:10px"></div></div>';
+    const wire = (kind) => {
+      const cap = kind === 'brand' ? 'Brand' : 'Cat';
+      $('#mgRename' + cap + 'Btn').addEventListener('click', async () => {
+        const from = $('#mgRename' + cap + 'From').value;
+        const to = $('#mgRename' + cap + 'To').value.trim();
+        const list = kind === 'brand' ? mgRenameBrands : mgRenameCats;
+        const entry = list.find((v) => v.name === from);
+        const result = $('#mgRenameResult');
+        if (!to) { result.innerHTML = '<div class="error-box">' + esc(t('fill_all')) + '</div>'; return; }
+        if (!entry || !confirm(from + ' → ' + to + ' (' + entry.count + ' ' + t('products') + ')')) return;
+        result.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+        try {
+          const res = await renameCatalogValue(kind, from, to);
+          result.innerHTML = '<div style="color:green;font-weight:700">' + esc(t('rename_done')) + ' — ' + res.changed + ' ' + esc(t('products')) + '</div>';
+          $('#mgRename' + cap + 'To').value = '';
+          await renderRenamePanel();
+          state.brands = []; state.categories = [];
+          loadBrands(); loadMgCatalog(true);
+        } catch (e) {
+          result.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+        }
+      });
+    };
+    wire('brand');
+    wire('category');
+  } catch (e) {
+    box.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
 async function renderManageCatalog(body) {
   body.innerHTML =
     '<div class="mg-card"><div class="row-flex">' +
@@ -2285,6 +2347,7 @@ async function renderManageCatalog(body) {
     '<button class="btn btn-outline" type="button" id="mgImportBtn" style="flex:1">' + esc(t('excel_import')) + '</button>' +
     '</div><input id="mgImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>' +
     '<div id="mgExcelPanel" style="margin-top:10px"></div>' +
+    '<div id="mgRenamePanel" style="margin-top:12px"></div>' +
     '<div class="chips" style="margin-top:10px" id="mgFilterChips">' +
     '<button type="button" class="chip active" data-mgfilter="all">' + esc(t('filter_all')) + ' <span data-mgcount="all"></span></button>' +
     '<button type="button" class="chip" data-mgfilter="in">' + esc(t('filter_in_stock')) + ' <span data-mgcount="in_stock"></span></button>' +
@@ -2387,6 +2450,7 @@ async function renderManageCatalog(body) {
     } catch (e) { toast(t('error_load')); }
   });
   loadMgCatalog(true);
+  renderRenamePanel();
 }
 // Downscale a picked photo to max 800px JPEG before upload — keeps the
 // upload small and the stored image a sensible size for product cards.
