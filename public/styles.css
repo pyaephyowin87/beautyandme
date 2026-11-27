@@ -98,18 +98,19 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
 @media(min-width:900px){.hrow .card{flex-basis:240px}}
 /* Tablet band (480px and up): tablets show the phone layout on a physically
    bigger screen, so the same px looks larger — shrink text here only.
-   Phones stay under 480px and keep their current sizes. */
+   Phones stay under 480px and keep their current sizes.
+   fb38 2026-11-27: one more step smaller — tablet text still looked big. */
 @media(min-width:480px){
-  .card-name{font-size:12px}.card-price{font-size:13px}.card-brand{font-size:10px}
-  .card-add{font-size:12px}.section-head h2{font-size:16px}.badge{font-size:11px}.was{font-size:11px}
-  .detail-body h2{font-size:17px}.detail-brand{font-size:12px}.detail-note{font-size:13px}
-  .opt-btn{font-size:13px}.modal-head h2{font-size:16px}
-  .sticky-bar .sb-price .amt{font-size:16px}.sticky-bar .sb-price .st{font-size:12px}
-  .sticky-bar .btn{font-size:14px}
-  .qty-stepper button{width:30px;height:30px;font-size:16px}.qty-stepper span{font-size:14px}
-  .nav-item{font-size:11px}.search-row input{font-size:14px}.search-row .btn{font-size:14px;padding:10px 14px}
+  .card-name{font-size:11px}.card-price{font-size:12px}.card-brand{font-size:10px}
+  .card-add{font-size:11px}.section-head h2{font-size:15px}.badge{font-size:10px}.was{font-size:10px}
+  .detail-body h2{font-size:16px}.detail-brand{font-size:11px}.detail-note{font-size:12px}
+  .opt-btn{font-size:12px}.modal-head h2{font-size:15px}
+  .sticky-bar .sb-price .amt{font-size:15px}.sticky-bar .sb-price .st{font-size:11px}
+  .sticky-bar .btn{font-size:13px}
+  .qty-stepper button{width:28px;height:28px;font-size:15px}.qty-stepper span{font-size:13px}
+  .nav-item{font-size:10px}.search-row input{font-size:13px}.search-row .btn{font-size:13px;padding:9px 12px}
 }
-@media(min-width:600px){.card-name{font-size:12px}.card-price{font-size:13px}.card-add{font-size:12px;padding:8px}}
+@media(min-width:600px){.card-name{font-size:11px}.card-price{font-size:12px}.card-add{font-size:11px;padding:8px}}
 .card{
   background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
   overflow:hidden; box-shadow:var(--shadow); display:flex; flex-direction:column;
