@@ -28,6 +28,7 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const store = require('./lib/store');
 const mailer = require('./lib/mailer');
+const push = require('./lib/push');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -305,6 +306,36 @@ async function logActivity(req, action, targetType, targetId, details) {
       details: details || null,
     });
   } catch (e) { console.error('[activity] log failed', e && e.message); }
+}
+
+// Staff push alert (fix-batch-29): on a new order, notify every device
+// token belonging to staff (owner, managers, sale staff). Never throws —
+// any failure is logged and swallowed so the order flow is unaffected.
+async function notifyStaffOfOrder(order) {
+  try {
+    const tokens = await store.listDeviceTokens();
+    if (!tokens.length) return;
+    const managers = (await store.getSetting('managers')) || [];
+    const saleStaff = (await store.getSetting('sale_staff')) || [];
+    const staffPhones = new Set([MANAGER_PHONE,
+      ...(Array.isArray(managers) ? managers : []),
+      ...(Array.isArray(saleStaff) ? saleStaff : [])].map((p) => normalizePhone(p)));
+    const staffTokens = tokens
+      .filter((rec) => rec && rec.token && staffPhones.has(normalizePhone(rec.user_phone)))
+      .map((rec) => rec.token);
+    if (!staffTokens.length) return;
+    const total = Number(order.total).toLocaleString('en-US');
+    const result = await push.sendToStaff(staffTokens, {
+      title: 'Order အသစ်',
+      body: `${order.id} — ${total} Ks`,
+      data: { order_id: String(order.id), type: 'new_order' },
+    });
+    if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) {
+      await store.deleteDeviceTokens(result.invalidTokens);
+    }
+  } catch (e) {
+    console.error('[push] staff notify failed', e && e.message);
+  }
 }
 
 // Optional auth: attach req.user when a valid Bearer token is present.
@@ -628,6 +659,28 @@ async function withCouponProductNames(list) {
   return list;
 }
 
+// Device push tokens (fix-batch-29): the Capacitor app registers its FCM
+// token here after login. Upsert by token; any logged-in user may register
+// (staff filtering happens at send time, not here).
+app.post('/api/devices/register', authMiddleware, async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const token = String(body.token || '').trim();
+    const platform = body.platform === 'ios' ? 'ios' : 'android';
+    if (!token || token.length > 512) return res.status(400).json({ error: 'invalid_token' });
+    const now = new Date().toISOString();
+    const existing = (await store.listDeviceTokens()).find((r) => r.token === token);
+    await store.saveDeviceToken({
+      token,
+      user_phone: normalizePhone(req.user.phone),
+      platform,
+      created_at: existing ? existing.created_at : now,
+      last_seen: now,
+    });
+    return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
 // Public coupon list — only active coupons, only what a customer needs
 // to pick one (code + value). Private/expired coupons never appear here.
 // Customer phone lists are NEVER sent to customers — only a flag.
@@ -887,6 +940,9 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     await store.saveOrder(order);
     // First entry in this voucher's history: who placed it, for how much.
     await logActivity({ user: { phone: custPhone, name: String(customer.name).trim() } }, 'order_create', 'order', orderId, `order placed — ${order.total} Ks (${orderItems.length} item${orderItems.length > 1 ? 's' : ''})`);
+    // Staff push alert (fix-batch-29): fire-and-forget — a push failure
+    // must never fail or delay the order response.
+    notifyStaffOfOrder(order).catch((e) => console.error('[push] staff notify failed', e && e.message));
 
     const { screenshot_path: _sp, ...rest } = order;
     void _sp;
