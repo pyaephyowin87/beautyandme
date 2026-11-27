@@ -318,27 +318,48 @@ async function staffPhonesSet() {
     ...(Array.isArray(saleStaff) ? saleStaff : [])].map((p) => normalizePhone(p)));
 }
 
+// App icon badge (fix-batch-32): each recipient's FCM message carries
+// THEIR OWN unread count, so group tokens by phone and send once per
+// phone. Returns a Map phone -> [token, ...].
+function tokensByPhone(records) {
+  const map = new Map();
+  for (const rec of records || []) {
+    if (!rec || !rec.token) continue;
+    const phone = normalizePhone(rec.user_phone);
+    if (!phone) continue;
+    if (!map.has(phone)) map.set(phone, []);
+    map.get(phone).push(rec.token);
+  }
+  return map;
+}
+
 // Staff push alert (fix-batch-29): on a new order, notify every device
 // token belonging to staff (owner, managers, sale staff). Never throws —
 // any failure is logged and swallowed so the order flow is unaffected.
+// Badge (fix-batch-32): each staff member's own unread count, read AFTER
+// the inbox rows exist (the order-create route chains inbox first), so
+// the new row is included in the count.
 async function notifyStaffOfOrder(order) {
   try {
     const tokens = await store.listDeviceTokens();
     if (!tokens.length) return;
     const staffPhones = await staffPhonesSet();
-    const staffTokens = tokens
-      .filter((rec) => rec && rec.token && staffPhones.has(normalizePhone(rec.user_phone)))
-      .map((rec) => rec.token);
-    if (!staffTokens.length) return;
+    const staffByPhone = tokensByPhone(tokens.filter((rec) => rec && rec.token && staffPhones.has(normalizePhone(rec.user_phone))));
+    if (!staffByPhone.size) return;
     const total = Number(order.total).toLocaleString('en-US');
-    const result = await push.sendToStaff(staffTokens, {
-      title: 'Order အသစ်',
-      body: `${order.id} — ${total} Ks`,
-      data: { order_id: String(order.id), type: 'new_order' },
-    });
-    if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) {
-      await store.deleteDeviceTokens(result.invalidTokens);
+    const invalid = [];
+    for (const [phone, phoneTokens] of staffByPhone) {
+      let badge;
+      try { badge = await store.unreadCountForPhone(phone); } catch (e) { badge = undefined; }
+      const result = await push.sendToStaff(phoneTokens, {
+        title: 'Order အသစ်',
+        body: `${order.id} — ${total} Ks`,
+        data: { order_id: String(order.id), type: 'new_order' },
+        badge,
+      });
+      if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) invalid.push(...result.invalidTokens);
     }
+    if (invalid.length) await store.deleteDeviceTokens(invalid);
   } catch (e) {
     console.error('[push] staff notify failed', e && e.message);
   }
@@ -413,10 +434,15 @@ async function notifyCustomerOfStatus(order, newStatus) {
       .filter((rec) => rec && rec.token && normalizePhone(rec.user_phone) === custPhone)
       .map((rec) => rec.token);
     if (!custTokens.length) return;
+    // Badge (fix-batch-32): the customer's own unread count, read AFTER
+    // the inbox row above was created, so it includes this update.
+    let badge;
+    try { badge = await store.unreadCountForPhone(custPhone); } catch (e) { badge = undefined; }
     const result = await push.sendToStaff(custTokens, {
       title,
       body,
       data: { order_id: String(order.id), type: 'order_update' },
+      badge,
     });
     if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) {
       await store.deleteDeviceTokens(result.invalidTokens);
@@ -769,6 +795,28 @@ app.post('/api/devices/register', authMiddleware, async (req, res, next) => {
   } catch (err) { return next(err); }
 });
 
+// App icon badge (fix-batch-32): after the user reads their last unread
+// notification, clear the app icon badge with a silent push (no visible
+// notification, no banner). Fire-and-forget; never throws, never delays
+// the read response — callers invoke it without awaiting.
+async function clearBadgeForPhone(phone) {
+  try {
+    const norm = normalizePhone(phone);
+    if (!norm) return;
+    const tokens = await store.listDeviceTokens();
+    const phoneTokens = tokens
+      .filter((rec) => rec && rec.token && normalizePhone(rec.user_phone) === norm)
+      .map((rec) => rec.token);
+    if (!phoneTokens.length) return;
+    const result = await push.sendBadgeUpdate(phoneTokens, 0);
+    if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) {
+      await store.deleteDeviceTokens(result.invalidTokens);
+    }
+  } catch (e) {
+    console.error('[push] badge clear failed', e && e.message);
+  }
+}
+
 // Notification inbox (fix-batch-30): rows are addressed to one phone
 // only — a caller can never see another user's notifications.
 app.get('/api/notifications', authMiddleware, async (req, res, next) => {
@@ -784,15 +832,33 @@ app.get('/api/notifications', authMiddleware, async (req, res, next) => {
 
 app.post('/api/notifications/:id/read', authMiddleware, async (req, res, next) => {
   try {
-    const rec = await store.markNotificationRead(req.params.id, normalizePhone(req.user.phone));
+    const phone = normalizePhone(req.user.phone);
+    const rec = await store.markNotificationRead(req.params.id, phone);
     if (!rec) return res.status(404).json({ error: 'not_found' });
+    // Badge clear (fix-batch-32): only when this was the last unread row.
+    // A new row arriving between the mark and the check would leave
+    // unread > 0, so no clear is sent — the next push carries the right
+    // count instead.
+    try {
+      const unread = await store.unreadCountForPhone(phone);
+      if (unread === 0) clearBadgeForPhone(phone).catch(() => {});
+    } catch (e) { /* badge clear must never fail the read */ }
     return res.json({ ok: true });
   } catch (err) { return next(err); }
 });
 
 app.post('/api/notifications/read-all', authMiddleware, async (req, res, next) => {
   try {
-    const count = await store.markAllNotificationsRead(normalizePhone(req.user.phone));
+    const phone = normalizePhone(req.user.phone);
+    const count = await store.markAllNotificationsRead(phone);
+    // Badge clear (fix-batch-32): only when rows were actually marked and
+    // nothing is unread now. A read-all with nothing unread sends nothing.
+    if (count > 0) {
+      try {
+        const unread = await store.unreadCountForPhone(phone);
+        if (unread === 0) clearBadgeForPhone(phone).catch(() => {});
+      } catch (e) { /* badge clear must never fail the read */ }
+    }
     return res.json({ ok: true, read: count });
   } catch (err) { return next(err); }
 });
@@ -1056,11 +1122,12 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     await store.saveOrder(order);
     // First entry in this voucher's history: who placed it, for how much.
     await logActivity({ user: { phone: custPhone, name: String(customer.name).trim() } }, 'order_create', 'order', orderId, `order placed — ${order.total} Ks (${orderItems.length} item${orderItems.length > 1 ? 's' : ''})`);
-    // Staff push alert (fix-batch-29): fire-and-forget — a push failure
-    // must never fail or delay the order response.
-    notifyStaffOfOrder(order).catch((e) => console.error('[push] staff notify failed', e && e.message));
-    // Inbox rows (fix-batch-30): same fire-and-forget discipline.
-    notifyOrderInbox(order).catch((e) => console.error('[notif] inbox notify failed', e && e.message));
+    // Inbox rows first (fix-batch-30), then the staff push (fix-batch-29),
+    // so the badge count (fix-batch-32) includes the new row. Fire-and-
+    // forget — a push failure must never fail or delay the order response.
+    notifyOrderInbox(order)
+      .then(() => notifyStaffOfOrder(order))
+      .catch((e) => console.error('[notif] order notify failed', e && e.message));
 
     const { screenshot_path: _sp, ...rest } = order;
     void _sp;
@@ -1159,27 +1226,43 @@ app.post('/api/manage/devices/test-push', authMiddleware, managerMiddleware, asy
   try {
     const tokens = await store.listDeviceTokens();
     const staffPhones = await staffPhonesSet();
-    const staffTokens = tokens
-      .filter((rec) => rec && rec.token && staffPhones.has(normalizePhone(rec.user_phone)))
-      .map((rec) => rec.token);
-    if (!staffTokens.length) {
+    const staffByPhone = tokensByPhone(tokens.filter((rec) => rec && rec.token && staffPhones.has(normalizePhone(rec.user_phone))));
+    if (!staffByPhone.size) {
       return res.json({ ok: false, sent: false, success: 0, failure: 0, reason: 'no_tokens' });
     }
-    const result = await push.sendToStaff(staffTokens, {
-      title: 'Test Push — Beauty & Me',
-      body: 'Push စမ်းသပ်မှု — ဒီ message မြင်ရင် push အလုပ်လုပ်ပါတယ်',
-      data: { type: 'test_push' },
-    });
-    if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) {
-      await store.deleteDeviceTokens(result.invalidTokens);
+    // Badge (fix-batch-32): each staff phone's own unread count, one send
+    // per phone because the badge differs per recipient. Totals are
+    // aggregated so the response shape is unchanged.
+    let success = 0; let failure = 0; let sentAny = false;
+    let firstReason = ''; let firstDetail = '';
+    const invalid = [];
+    for (const [phone, phoneTokens] of staffByPhone) {
+      let badge;
+      try { badge = await store.unreadCountForPhone(phone); } catch (e) { badge = undefined; }
+      const result = await push.sendToStaff(phoneTokens, {
+        title: 'Test Push — Beauty & Me',
+        body: 'Push စမ်းသပ်မှု — ဒီ message မြင်ရင် push အလုပ်လုပ်ပါတယ်',
+        data: { type: 'test_push' },
+        badge,
+      });
+      if (result && result.sent) {
+        sentAny = true;
+        success += result.successCount || 0;
+        failure += result.failureCount || 0;
+      } else if (result) {
+        firstReason = firstReason || result.reason || 'send_failed';
+        firstDetail = firstDetail || result.detail || '';
+      }
+      if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) invalid.push(...result.invalidTokens);
     }
-    if (result && result.sent) {
-      return res.json({ ok: true, sent: true, success: result.successCount || 0, failure: result.failureCount || 0, reason: 'ok' });
+    if (invalid.length) await store.deleteDeviceTokens(invalid);
+    if (sentAny) {
+      return res.json({ ok: true, sent: true, success, failure, reason: 'ok' });
     }
     return res.json({
       ok: false, sent: false, success: 0, failure: 0,
-      reason: (result && result.reason) || 'send_failed',
-      detail: (result && result.detail) || '',
+      reason: firstReason || 'send_failed',
+      detail: firstDetail || '',
     });
   } catch (err) { return next(err); }
 });
