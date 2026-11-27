@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Beauty &amp; Me — K-Beauty Shop</title>
-<link rel="stylesheet" href="styles.css?v=12">
+<link rel="stylesheet" href="styles.css?v=13">
 <link rel="icon" href="logo.png">
 </head>
 <body>
@@ -25,6 +25,16 @@
     <button id="searchBtn" class="btn btn-primary" type="button">ရှာမယ်</button>
   </div>
 </header>
+
+<!-- Foreground push banner (fix-batch-31): Android shows no system notification
+     while the app is open, so an incoming push drops this banner instead. -->
+<div id="pushBanner" class="push-banner" hidden role="status">
+  <button id="pushBannerBody" class="push-banner-body" type="button">
+    <span id="pushBannerTitle" class="push-banner-title"></span>
+    <span id="pushBannerText" class="push-banner-text"></span>
+  </button>
+  <button id="pushBannerClose" class="push-banner-close" type="button" aria-label="Dismiss">✕</button>
+</div>
 
 <main id="main">
   <!-- HOME VIEW -->
@@ -242,6 +252,6 @@
 <!-- Floating Messenger button — always visible, one tap to chat with the Page -->
 <a id="msgFabLink" class="msg-fab" href="https://m.me/beautyandme117" target="_blank" rel="noopener" aria-label="Messenger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.5 2 2 5.8 2 10.5c0 2.7 1.5 5.1 3.8 6.5-.1 1-.5 2.3-1.3 3.3 0 0 1.7.2 3.2-.9.7.2 1.5.3 2.3.3 5.5 0 10-3.8 10-8.5S17.5 2 12 2zm1.5 5.5-3.7 4h2.5l-1 4.6 3.7-4h-2.5l1-4.6z"/></svg></a>
 
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>

@@ -168,6 +168,7 @@ const I18N = {
     devices_reason_no_tokens: 'Staff device မရှိသေးပါ',
     devices_reason_send_failed: 'Push ပို့မရပါ',
     devices_staff: 'Staff', devices_last_seen: 'နောက်ဆုံး တွေ့တာ',
+    push_banner_close: 'ပိတ်မယ်',
   },
   en: {
     nav_home: 'Home', nav_shop: 'Shop', nav_orders: 'Orders', nav_manage: 'Manage',
@@ -328,6 +329,7 @@ const I18N = {
     devices_reason_no_tokens: 'No staff devices registered',
     devices_reason_send_failed: 'Push send failed',
     devices_staff: 'Staff', devices_last_seen: 'Last seen',
+    push_banner_close: 'Dismiss',
   },
 };
 let lang = localStorage.getItem('bm_lang') || 'my';
@@ -3112,6 +3114,15 @@ function wire() {
   });
   $('#notifBell').addEventListener('click', openNotifications);
   $('#notifClose').addEventListener('click', () => closeOverlay('#notifOverlay', '#notifModal'));
+  // Foreground push banner (fix-batch-31): tap → that order (or the
+  // inbox); × dismisses. The banner itself is only ever shown from a
+  // push, so these handlers are harmless on the plain website.
+  $('#pushBannerBody').addEventListener('click', () => {
+    const orderId = pushBannerOrderId;
+    hidePushBanner();
+    try { goToNotificationOrder(orderId); } catch (e) { /* navigation must never break the shop */ }
+  });
+  $('#pushBannerClose').addEventListener('click', () => hidePushBanner());
   $('#notifOverlay').addEventListener('click', (ev) => { if (ev.target === $('#notifOverlay')) closeOverlay('#notifOverlay', '#notifModal'); });
   // Coming back to the tab/app refreshes the bell — a notification that
   // arrived while the page was hidden shows up without waiting for the
@@ -3203,6 +3214,14 @@ async function registerPushToken() {
     pushRegistered = true; // one registration attempt per page load
     const perm = await PN.requestPermissions();
     if (!perm || perm.receive !== 'granted') return;
+    // Foreground + tap handlers (fix-batch-31): added once per page load,
+    // next to the token registration, so a push that arrives while the
+    // app is open (or is tapped from the system tray) is never lost.
+    if (!pushListenersAdded) {
+      pushListenersAdded = true;
+      try { PN.addListener('pushNotificationReceived', onForegroundPush); } catch (e) { /* silent */ }
+      try { PN.addListener('pushNotificationActionPerformed', onPushActionPerformed); } catch (e) { /* silent */ }
+    }
     PN.addListener('registration', async (reg) => {
       try {
         if (reg && reg.value) {
@@ -3213,6 +3232,65 @@ async function registerPushToken() {
     PN.addListener('registrationError', () => {});
     await PN.register();
   } catch (e) { /* push unavailable — shop works exactly as before */ }
+}
+
+/* ---------------- foreground push banner (fix-batch-31) ----------------
+   Android shows NO system notification while the app is open — the
+   Capacitor plugin hands the message to the app via
+   pushNotificationReceived instead, and without a listener nothing
+   visible happens (that's why Test push said 1 ✓ / 0 ✗ but nothing
+   appeared on the tablet). The banner below is the visible half:
+   title + body, tap → that order (or the inbox), × / 6s auto-dismiss.
+   pushNotificationActionPerformed covers the system-notification tap
+   (background / killed app). Every handler is wrapped so push handling
+   can never break the shop. */
+let pushBannerTimer = null;
+let pushBannerOrderId = null;
+let pushListenersAdded = false;
+
+function showPushBanner(title, body, orderId) {
+  try {
+    const bar = $('#pushBanner');
+    const titleEl = $('#pushBannerTitle');
+    const textEl = $('#pushBannerText');
+    if (!bar || !titleEl || !textEl) return;
+    titleEl.textContent = title || t('notif_title');
+    textEl.textContent = body || '';
+    const closeBtn = $('#pushBannerClose');
+    if (closeBtn) closeBtn.setAttribute('aria-label', t('push_banner_close'));
+    pushBannerOrderId = orderId || null;
+    bar.hidden = false;
+    if (pushBannerTimer) clearTimeout(pushBannerTimer);
+    pushBannerTimer = setTimeout(hidePushBanner, 6000);
+  } catch (e) { /* banner must never break the shop */ }
+}
+
+function hidePushBanner() {
+  try {
+    if (pushBannerTimer) { clearTimeout(pushBannerTimer); pushBannerTimer = null; }
+    const bar = $('#pushBanner');
+    if (bar) bar.hidden = true;
+    pushBannerOrderId = null;
+  } catch (e) { /* silent */ }
+}
+
+function onForegroundPush(notification) {
+  try {
+    if (!notification) return;
+    const title = notification.title || '';
+    const body = notification.body || '';
+    const orderId = notification.data && notification.data.order_id ? String(notification.data.order_id) : null;
+    if (title || body) showPushBanner(title, body, orderId);
+    loadNotifications();
+  } catch (e) { /* push handling must never break the shop */ }
+}
+
+function onPushActionPerformed(action) {
+  try {
+    const n = action && action.notification;
+    const orderId = n && n.data && n.data.order_id ? String(n.data.order_id) : null;
+    goToNotificationOrder(orderId);
+  } catch (e) { /* silent */ }
 }
 
 /* ---------------- notification inbox (fix-batch-30) ----------------
@@ -3301,15 +3379,13 @@ async function renderNotifications() {
   }
 }
 
-async function openNotificationOrder(btn) {
-  const id = btn.dataset.notif;
-  const orderId = btn.dataset.order;
-  try { await api('/notifications/' + encodeURIComponent(id) + '/read', { method: 'POST' }); } catch (e) { /* silent */ }
-  notifUnread = Math.max(0, notifUnread - 1);
-  updateNotifBadge();
-  if (!orderId) { renderNotifications(); return; }
-  closeOverlay('#notifOverlay', '#notifModal');
-  const isStaff = !!(state.user && (state.user.is_manager || state.user.is_sale_staff));
+/* Shared tap-to-order navigation for inbox rows, the foreground push
+   banner and system-notification taps: staff → Manage order detail,
+   customer → My Orders detail, no order → the inbox. */
+function goToNotificationOrder(orderId) {
+  if (!orderId) { openNotifications(); return; }
+  if (!state.user) { openNotifications(); return; }
+  const isStaff = !!(state.user.is_manager || state.user.is_sale_staff);
   if (isStaff) {
     showView('manage');
     loadManage('orders');
@@ -3318,6 +3394,17 @@ async function openNotificationOrder(btn) {
     showView('orders');
     openOrderDetail(orderId);
   }
+}
+
+async function openNotificationOrder(btn) {
+  const id = btn.dataset.notif;
+  const orderId = btn.dataset.order;
+  try { await api('/notifications/' + encodeURIComponent(id) + '/read', { method: 'POST' }); } catch (e) { /* silent */ }
+  notifUnread = Math.max(0, notifUnread - 1);
+  updateNotifBadge();
+  if (!orderId) { renderNotifications(); return; }
+  closeOverlay('#notifOverlay', '#notifModal');
+  goToNotificationOrder(orderId);
 }
 
 /* ---------------- manage: devices (fix-batch-30) ----------------
