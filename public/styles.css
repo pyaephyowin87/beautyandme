@@ -87,11 +87,16 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
 
 /* ---------- Product grid / rows ---------- */
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-@media(min-width:640px){.grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:600px){.grid{grid-template-columns:repeat(3,1fr)}}
 @media(min-width:900px){.grid{grid-template-columns:repeat(4,1fr)}}
 .hrow{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none}
 .hrow::-webkit-scrollbar{display:none}
 .hrow .card{flex:0 0 168px}
+/* Tablet/wide: row cards grow so prices + the Add button fit instead of
+   clipping; card text shrinks a touch and images grow with the wider cards. */
+@media(min-width:600px){.hrow .card{flex-basis:210px}}
+@media(min-width:900px){.hrow .card{flex-basis:240px}}
+@media(min-width:600px){.card-name{font-size:14px}.card-price{font-size:15px}.card-add{font-size:13px;padding:8px}}
 .card{
   background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
   overflow:hidden; box-shadow:var(--shadow); display:flex; flex-direction:column;
@@ -105,8 +110,10 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
 }
 .card-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:4px;flex:1}
 .card-brand{font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--purple);text-transform:uppercase}
-.card-name{font-size:15px;font-weight:600;line-height:1.35;min-height:40px}
-.card-price{font-weight:800;font-size:16px;color:var(--pink)}
+/* Name clamp: max 2 lines + ellipsis (long names wrapped to 5 lines on tablet).
+   Works on the <button class="card-name"> — display comes from this rule. */
+.card-name{font-size:15px;font-weight:600;line-height:1.35;min-height:40px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card-price{font-weight:800;font-size:16px;color:var(--pink);display:flex;flex-wrap:wrap;align-items:baseline}
 .was{font-size:13px;color:var(--muted);font-weight:500;text-decoration:line-through;margin-right:6px;white-space:nowrap}
 .price-now{white-space:nowrap}
 /* Pin the stock pill + Add to Cart button to the bottom of every card, so the
