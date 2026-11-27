@@ -157,6 +157,17 @@ const I18N = {
     continue_shopping: 'ဆက်ပြီး ဈေးဝယ်မယ်', back_home: 'Home ပြန်မယ်',
     select_option: 'Option ရွေးပါ', search_products: 'ပစ္စည်း ရှာမယ်…',
     results: 'ခု တွေ့ပါတယ်', code: 'ကုဒ်',
+    notif_title: 'အသိပေးချက်များ', notif_empty: 'အသိပေးချက် မရှိသေးပါ', notif_mark_all: 'အကုန် ဖတ်ပြီးပြီ လို့ မှတ်မယ်',
+    devices_title: 'Device များ', devices_none: 'Device မရှိသေးပါ — staff တွေ app ကနေ အရင် login ဝင်ဖို့ လိုပါတယ်',
+    devices_test: 'Test push ပို့မယ်', devices_testing: 'ပို့နေပါတယ်…',
+    devices_test_ok: 'Test push ပို့ပြီးပါပြီ', devices_test_fail: 'Test push ပို့မရပါ',
+    devices_status: 'Push အခြေအနေ',
+    devices_status_ok: 'Push ချိတ်ပြီးပါပြီ', devices_status_unknown: 'မစစ်ရသေးပါ — Test push နှိပ်ပြီး စစ်ပါ',
+    devices_reason_not_configured: 'Push မချိတ်ရသေးပါ — service-account key မရှိပါ (Render env FIREBASE_SERVICE_ACCOUNT)',
+    devices_reason_invalid_config: 'Push key မမှန်ပါ — Render env ထဲက service-account JSON စစ်ပါ',
+    devices_reason_no_tokens: 'Staff device မရှိသေးပါ',
+    devices_reason_send_failed: 'Push ပို့မရပါ',
+    devices_staff: 'Staff', devices_last_seen: 'နောက်ဆုံး တွေ့တာ',
   },
   en: {
     nav_home: 'Home', nav_shop: 'Shop', nav_orders: 'Orders', nav_manage: 'Manage',
@@ -306,6 +317,17 @@ const I18N = {
     continue_shopping: 'Continue shopping', back_home: 'Back to Home',
     select_option: 'Choose an option', search_products: 'Search products…',
     results: 'found', code: 'Code',
+    notif_title: 'Notifications', notif_empty: 'No notifications yet', notif_mark_all: 'Mark all read',
+    devices_title: 'Devices', devices_none: 'No devices yet — staff need to log in from the app first',
+    devices_test: 'Send test push', devices_testing: 'Sending…',
+    devices_test_ok: 'Test push sent', devices_test_fail: 'Test push failed',
+    devices_status: 'Push status',
+    devices_status_ok: 'Push is set up', devices_status_unknown: 'Not checked yet — send a test push',
+    devices_reason_not_configured: 'Push is not set up — the service-account key is missing (Render env FIREBASE_SERVICE_ACCOUNT)',
+    devices_reason_invalid_config: 'Push key is invalid — check the service-account JSON in Render env',
+    devices_reason_no_tokens: 'No staff devices registered',
+    devices_reason_send_failed: 'Push send failed',
+    devices_staff: 'Staff', devices_last_seen: 'Last seen',
   },
 };
 let lang = localStorage.getItem('bm_lang') || 'my';
@@ -1344,6 +1366,8 @@ async function submitAuth() {
     closeAuth();
     refreshAuthUI();
     registerPushToken();
+    loadNotifications();
+    startNotifPolling();
     toast(t('login') + ' ✓');
   } catch (e) {
     const code = e.data && e.data.error;
@@ -1492,6 +1516,9 @@ function logout() {
   state.user = null;
   localStorage.removeItem('bm_token');
   state.manageLoaded = {};
+  stopNotifPolling();
+  notifUnread = 0;
+  updateNotifBadge();
   refreshAuthUI();
   showView('home');
 }
@@ -1505,6 +1532,7 @@ function refreshAuthUI() {
   const isMgr = !!(state.user && (state.user.is_manager || state.user.is_sale_staff));
   $('#navManage').hidden = !isMgr;
   if (!isMgr && !$('#view-manage').hidden) showView('home');
+  updateNotifBadge();
 }
 async function restoreSession() {
   if (!state.token) return;
@@ -1694,6 +1722,7 @@ function loadManage(tab) {
   else if (tab === 'applink') renderManageAppLinks(body);
   else if (tab === 'woocommerce') renderManageWoo(body);
   else if (tab === 'activity') renderManageActivity(body);
+  else if (tab === 'devices') renderManageDevices(body);
 }
 /* ---------------- manage: orders ---------------- */
 let mgOrders = { q: '', status: '', offset: 0, items: [] };
@@ -3081,6 +3110,15 @@ function wire() {
     if (state.user) showView('account');
     else openAuth();
   });
+  $('#notifBell').addEventListener('click', openNotifications);
+  $('#notifClose').addEventListener('click', () => closeOverlay('#notifOverlay', '#notifModal'));
+  $('#notifOverlay').addEventListener('click', (ev) => { if (ev.target === $('#notifOverlay')) closeOverlay('#notifOverlay', '#notifModal'); });
+  // Coming back to the tab/app refreshes the bell — a notification that
+  // arrived while the page was hidden shows up without waiting for the
+  // 30s poll.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.token && state.user) loadNotifications();
+  });
   $('#authClose').addEventListener('click', closeAuth);
   $('#authOverlay').addEventListener('click', (ev) => { if (ev.target === $('#authOverlay')) closeAuth(); });
   $$('#authTabs .tab').forEach((b) => b.addEventListener('click', () => setAuthTab(b.dataset.atab)));
@@ -3177,6 +3215,167 @@ async function registerPushToken() {
   } catch (e) { /* push unavailable — shop works exactly as before */ }
 }
 
+/* ---------------- notification inbox (fix-batch-30) ----------------
+   The reliable half of order alerts: the server stores one inbox row per
+   recipient phone on every order and status change, and the app polls
+   for them. Unlike the FCM push (permission / token / key can each
+   silently break it), a row the server wrote is always there when the
+   app opens. Bell badge = unread count; tapping a row marks it read
+   and jumps to that order (staff → Manage order, customer → My Orders). */
+let notifUnread = 0;
+let notifPollTimer = null;
+let notifPollBusy = false;
+
+function updateNotifBadge() {
+  const bell = $('#notifBell');
+  const badge = $('#notifBadge');
+  if (!bell || !badge) return;
+  bell.hidden = !state.user;
+  if (notifUnread > 0) {
+    badge.hidden = false;
+    badge.textContent = notifUnread > 99 ? '99+' : String(notifUnread);
+  } else {
+    badge.hidden = true;
+  }
+}
+
+async function loadNotifications() {
+  if (!state.token || !state.user) return;
+  try {
+    const data = await api('/notifications');
+    notifUnread = data.unread || 0;
+    updateNotifBadge();
+  } catch (e) { /* polling must never break the shop */ }
+}
+
+function startNotifPolling() {
+  stopNotifPolling();
+  if (!state.token || !state.user) return;
+  notifPollTimer = setInterval(() => {
+    if (notifPollBusy) return;
+    notifPollBusy = true;
+    loadNotifications().finally(() => { notifPollBusy = false; });
+  }, 30000);
+}
+
+function stopNotifPolling() {
+  if (notifPollTimer) { clearInterval(notifPollTimer); notifPollTimer = null; }
+}
+
+function openNotifications() {
+  openOverlay('#notifOverlay', '#notifModal');
+  renderNotifications();
+}
+
+async function renderNotifications() {
+  const body = $('#notifBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>';
+  try {
+    const data = await api('/notifications');
+    const items = data.notifications || [];
+    notifUnread = data.unread || 0;
+    updateNotifBadge();
+    if (!items.length) {
+      body.innerHTML = '<div class="empty">' + esc(t('notif_empty')) + '</div>';
+      return;
+    }
+    body.innerHTML =
+      (notifUnread > 0
+        ? '<div class="center" style="margin-bottom:10px"><button class="link-btn" type="button" id="notifReadAllBtn">' + esc(t('notif_mark_all')) + '</button></div>'
+        : '') +
+      items.map((n) =>
+        '<button type="button" class="notif-row' + (n.is_read ? '' : ' unread') + '" data-notif="' + esc(String(n.id)) + '" data-order="' + esc(String(n.order_id || '')) + '">' +
+        '<div class="nt-title">' + esc(n.title) + '</div>' +
+        '<div class="nt-body">' + esc(n.body) + '</div>' +
+        '<div class="nt-time">' + esc(fmtDate(n.created_at)) + '</div>' +
+        '</button>').join('');
+    const readAll = $('#notifReadAllBtn');
+    if (readAll) readAll.addEventListener('click', async () => {
+      try { await api('/notifications/read-all', { method: 'POST' }); } catch (e) { /* silent */ }
+      renderNotifications();
+    });
+    $$('[data-notif]', body).forEach((b) => b.addEventListener('click', () => openNotificationOrder(b)));
+  } catch (e) {
+    body.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
+
+async function openNotificationOrder(btn) {
+  const id = btn.dataset.notif;
+  const orderId = btn.dataset.order;
+  try { await api('/notifications/' + encodeURIComponent(id) + '/read', { method: 'POST' }); } catch (e) { /* silent */ }
+  notifUnread = Math.max(0, notifUnread - 1);
+  updateNotifBadge();
+  if (!orderId) { renderNotifications(); return; }
+  closeOverlay('#notifOverlay', '#notifModal');
+  const isStaff = !!(state.user && (state.user.is_manager || state.user.is_sale_staff));
+  if (isStaff) {
+    showView('manage');
+    loadManage('orders');
+    openAdminOrder(orderId);
+  } else {
+    showView('orders');
+    openOrderDetail(orderId);
+  }
+}
+
+/* ---------------- manage: devices (fix-batch-30) ----------------
+   Registered push devices + the test-push diagnostic. Tokens are
+   masked by the server — the full token never reaches this screen. */
+async function renderManageDevices(body) {
+  body.innerHTML = '<div class="mg-card"><h3>' + esc(t('devices_title')) + '</h3><div id="mgDevicesWrap"><div class="loading">' + esc(t('loading')) + '</div></div></div>';
+  try {
+    const data = await api('/manage/devices');
+    const devices = data.devices || [];
+    const wrap = $('#mgDevicesWrap');
+    const statusKey = data.push_status === 'configured' ? 'devices_status_ok'
+      : data.push_status === 'not_configured' ? 'devices_reason_not_configured'
+      : (data.push_status === 'invalid_config' || data.push_status === 'init_failed') ? 'devices_reason_invalid_config'
+      : 'devices_status_unknown';
+    wrap.innerHTML =
+      '<div class="line"><span>' + esc(t('devices_status')) + '</span><strong>' + esc(t(statusKey)) + '</strong></div>' +
+      '<div style="margin:12px 0"><button class="btn btn-primary" type="button" id="mgTestPushBtn">' + esc(t('devices_test')) + '</button></div>' +
+      '<div id="mgTestPushResult" class="meta-line"></div>' +
+      (devices.length
+        ? '<div class="table-wrap"><table class="mg-table"><thead><tr><th>' + esc(t('phone')) + '</th><th>Platform</th><th>' + esc(t('devices_last_seen')) + '</th><th>Token</th><th></th></tr></thead><tbody>' +
+          devices.map((d) =>
+            '<tr><td data-label="' + esc(t('phone')) + '">' + esc(d.user_phone || '') + '</td>' +
+            '<td data-label="Platform">' + esc(d.platform || '') + '</td>' +
+            '<td data-label="' + esc(t('devices_last_seen')) + '">' + esc(fmtDate(d.last_seen)) + '</td>' +
+            '<td data-label="Token"><span class="masked">' + esc(d.token_masked || '') + '</span></td>' +
+            '<td data-label="">' + (d.is_staff ? '<span class="status-pill">' + esc(t('devices_staff')) + '</span>' : '') + '</td></tr>').join('') +
+          '</tbody></table></div>'
+        : '<div class="empty">' + esc(t('devices_none')) + '</div>');
+    $('#mgTestPushBtn').addEventListener('click', async () => {
+      const btn = $('#mgTestPushBtn');
+      const out = $('#mgTestPushResult');
+      btn.disabled = true;
+      btn.textContent = t('devices_testing');
+      try {
+        const res = await api('/manage/devices/test-push', { method: 'POST' });
+        if (res.sent) {
+          out.textContent = t('devices_test_ok') + ' — ' + (res.success || 0) + ' ✓ / ' + (res.failure || 0) + ' ✗';
+          toast(t('devices_test_ok'));
+        } else {
+          const rk = res.reason === 'no_tokens' ? 'devices_reason_no_tokens'
+            : res.reason === 'not_configured' ? 'devices_reason_not_configured'
+            : (res.reason === 'invalid_config' || res.reason === 'init_failed') ? 'devices_reason_invalid_config'
+            : 'devices_reason_send_failed';
+          out.textContent = t('devices_test_fail') + ' — ' + t(rk) + (res.detail ? ' (' + res.detail + ')' : '');
+        }
+      } catch (e) {
+        out.textContent = t('devices_test_fail') + ' — ' + t('error_load');
+      }
+      btn.disabled = false;
+      btn.textContent = t('devices_test');
+    });
+  } catch (e) {
+    const wrap = $('#mgDevicesWrap');
+    if (wrap) wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+  }
+}
+
 async function init() {
   wire();
   applyI18n();
@@ -3185,6 +3384,8 @@ async function init() {
   renderCart();
   await restoreSession();
   registerPushToken();
+  loadNotifications();
+  startNotifPolling();
   await loadShopInfo();
   await loadBrands();
   await loadTypes();
