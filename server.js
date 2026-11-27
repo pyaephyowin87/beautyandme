@@ -1182,13 +1182,42 @@ app.get('/api/shop-info', async (_req, res, next) => {
 
 // ---------- Manage (manager only) ----------
 
-app.get('/api/manage/stats', authMiddleware, managerMiddleware, async (_req, res, next) => {
+// ---------- Manage: Dashboard stats (fix-batch-40) ----------
+// Period dashboard: ?period=today|week|month|all (default all).
+// "Today / this week / this month" are YANGON days (UTC+6:30, no DST),
+// not server UTC days — a 7am Yangon order must count as today.
+// Cancelled orders are NEVER sales: they are excluded from orders,
+// revenue and avg_order (before fb40 the all-time revenue summed them).
+// pending = orders still waiting for confirm inside the period.
+const YANGON_OFFSET_MS = 6.5 * 60 * 60 * 1000;
+function periodStartISO(period, nowMs) {
+  if (period !== 'today' && period !== 'week' && period !== 'month') return null;
+  const y = new Date(nowMs + YANGON_OFFSET_MS); // Yangon wall-clock view
+  const yMid = Date.UTC(y.getUTCFullYear(), y.getUTCMonth(), y.getUTCDate());
+  let start = yMid;
+  if (period === 'week') {
+    const dow = y.getUTCDay(); // 0 Sun .. 6 Sat; week starts Monday
+    start = yMid - ((dow + 6) % 7) * 24 * 60 * 60 * 1000;
+  } else if (period === 'month') {
+    start = Date.UTC(y.getUTCFullYear(), y.getUTCMonth(), 1);
+  }
+  return new Date(start - YANGON_OFFSET_MS).toISOString();
+}
+app.get('/api/manage/stats', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
+    const period = ['today', 'week', 'month', 'all'].includes(req.query.period) ? req.query.period : 'all';
     const [products, orders, users] = await Promise.all([
       store.listProducts(), store.listOrders(), store.listUsers(),
     ]);
-    const revenue = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
-    return res.json({ products: products.length, orders: orders.length, users: users.length, revenue });
+    const start = periodStartISO(period, Date.now());
+    const valid = orders.filter((o) => o.status !== 'cancelled' && (!start || (o.created_at || '') >= start));
+    const revenue = valid.reduce((s, o) => s + (Number(o.total) || 0), 0);
+    const pending = valid.filter((o) => o.status === 'pending').length;
+    return res.json({
+      period, orders: valid.length, revenue,
+      avg_order: valid.length ? Math.round(revenue / valid.length) : 0,
+      pending, products: products.length, users: users.length,
+    });
   } catch (err) { return next(err); }
 });
 
