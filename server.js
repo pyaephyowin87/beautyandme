@@ -559,6 +559,62 @@ app.get('/api/brands', async (_req, res, next) => {
   } catch (err) { return next(err); }
 });
 
+// ---------- Manage: rename a brand / category everywhere (fix-batch-41) ----------
+// Brands are NOT a master list — each product just carries its brand text,
+// so a typo splits one brand into two. These endpoints rename the value on
+// every product that carries it, in one step. A brand rename also updates
+// coupon scoping (coupons store brand names), or the renamed brand would
+// stop matching its coupons. Category rename touches the stored POS
+// category value only — the type customers see is derived from the name.
+app.get('/api/manage/category-values', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try {
+    const counts = {};
+    for (const p of await store.listProducts()) {
+      const c = String(p.category || '').trim();
+      if (!c) continue;
+      counts[c] = (counts[c] || 0) + 1;
+    }
+    const out = Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    return res.json(out);
+  } catch (err) { return next(err); }
+});
+
+async function renameCatalogValue(req, res, kind) {
+  const { from, to } = req.body || {};
+  const cleanFrom = String(from || '').trim();
+  const cleanTo = String(to || '').trim();
+  if (!cleanFrom || !cleanTo) return res.status(400).json({ error: 'name_required' });
+  if (cleanFrom === cleanTo) return res.status(400).json({ error: 'same_name' });
+  const products = await store.listProducts();
+  const hit = products.filter((p) => String(kind === 'brand' ? p.brand || '' : p.category || '') === cleanFrom);
+  if (!hit.length) return res.status(404).json({ error: 'not_found' });
+  for (const p of hit) {
+    if (kind === 'brand') p.brand = cleanTo; else p.category = cleanTo;
+    await store.saveProduct(p);
+  }
+  let couponsUpdated = 0;
+  if (kind === 'brand') {
+    for (const c of await store.listCoupons()) {
+      if (Array.isArray(c.brands) && c.brands.includes(cleanFrom)) {
+        c.brands = [...new Set(c.brands.map((b) => (b === cleanFrom ? cleanTo : b)))];
+        await store.saveCoupon(c);
+        couponsUpdated++;
+      }
+    }
+  }
+  await logActivity(req, kind === 'brand' ? 'product_brand_rename' : 'product_category_rename',
+    kind, cleanFrom, `${kind}: ${cleanFrom} → ${cleanTo} (${hit.length} products${couponsUpdated ? `, ${couponsUpdated} coupons` : ''})`);
+  return res.json({ ok: true, changed: hit.length, coupons_updated: couponsUpdated });
+}
+app.post('/api/manage/brands/rename', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try { return await renameCatalogValue(req, res, 'brand'); } catch (err) { return next(err); }
+});
+app.post('/api/manage/categories/rename', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try { return await renameCatalogValue(req, res, 'category'); } catch (err) { return next(err); }
+});
+
 app.post('/api/auth/register', async (req, res, next) => {
   try {
     const { name, phone, password, email } = req.body || {};
