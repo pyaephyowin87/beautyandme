@@ -308,6 +308,16 @@ async function logActivity(req, action, targetType, targetId, details) {
   } catch (e) { console.error('[activity] log failed', e && e.message); }
 }
 
+// Staff phones (fix-batch-29/30): owner + managers + sale staff, all
+// normalized. Shared by the push sender and the inbox notifier.
+async function staffPhonesSet() {
+  const managers = (await store.getSetting('managers')) || [];
+  const saleStaff = (await store.getSetting('sale_staff')) || [];
+  return new Set([MANAGER_PHONE,
+    ...(Array.isArray(managers) ? managers : []),
+    ...(Array.isArray(saleStaff) ? saleStaff : [])].map((p) => normalizePhone(p)));
+}
+
 // Staff push alert (fix-batch-29): on a new order, notify every device
 // token belonging to staff (owner, managers, sale staff). Never throws —
 // any failure is logged and swallowed so the order flow is unaffected.
@@ -315,11 +325,7 @@ async function notifyStaffOfOrder(order) {
   try {
     const tokens = await store.listDeviceTokens();
     if (!tokens.length) return;
-    const managers = (await store.getSetting('managers')) || [];
-    const saleStaff = (await store.getSetting('sale_staff')) || [];
-    const staffPhones = new Set([MANAGER_PHONE,
-      ...(Array.isArray(managers) ? managers : []),
-      ...(Array.isArray(saleStaff) ? saleStaff : [])].map((p) => normalizePhone(p)));
+    const staffPhones = await staffPhonesSet();
     const staffTokens = tokens
       .filter((rec) => rec && rec.token && staffPhones.has(normalizePhone(rec.user_phone)))
       .map((rec) => rec.token);
@@ -335,6 +341,88 @@ async function notifyStaffOfOrder(order) {
     }
   } catch (e) {
     console.error('[push] staff notify failed', e && e.message);
+  }
+}
+
+// Notification inbox (fix-batch-30): server-stored rows, so staff and
+// customers can always see order alerts inside the app — even when the
+// FCM push never arrives (permission off, token stale, key wrong).
+// Same discipline as the push hook: never throws, never delays orders.
+const ORDER_STATUS_NOTIF_MY = {
+  confirmed: 'Order အတည်ပြုပြီးပါပြီ',
+  delivering: 'Order ပို့ဆောင်နေပါပြီ',
+  delivered: 'Order ရောက်ရှိပါပြီ',
+  cancelled: 'Order ပယ်ဖျက်လိုက်ပါပြီ',
+};
+
+function notifId() {
+  return `NT-${Date.now().toString(36)}-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+async function createInboxRow(targetPhone, kind, title, body, orderId) {
+  const phone = normalizePhone(targetPhone);
+  if (!phone) return null;
+  return store.createNotification({
+    id: notifId(),
+    target_phone: phone,
+    kind,
+    title,
+    body,
+    order_id: orderId ? String(orderId) : null,
+    is_read: false,
+    created_at: new Date().toISOString(),
+  });
+}
+
+// New order → one inbox row per staff member + one for the customer.
+async function notifyOrderInbox(order) {
+  try {
+    const total = Number(order.total).toLocaleString('en-US');
+    const staffPhones = await staffPhonesSet();
+    for (const phone of staffPhones) {
+      try {
+        await createInboxRow(phone, 'new_order', 'Order အသစ်', `${order.id} — ${total} Ks`, order.id);
+      } catch (e) { console.error('[notif] staff inbox row failed', e && e.message); }
+    }
+    const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
+    if (custPhone) {
+      try {
+        await createInboxRow(custPhone, 'order_update', 'Order တင်ပြီးပါပြီ', `Order ${order.id} လက်ခံရပါပြီ — ${total} Ks`, order.id);
+      } catch (e) { console.error('[notif] customer inbox row failed', e && e.message); }
+    }
+  } catch (e) {
+    console.error('[notif] inbox notify failed', e && e.message);
+  }
+}
+
+// Status change → customer inbox row + FCM push to the customer's own
+// devices only (never staff tokens). Fire-and-forget; the status update
+// itself never waits on it and never fails because of it.
+async function notifyCustomerOfStatus(order, newStatus) {
+  const title = ORDER_STATUS_NOTIF_MY[newStatus];
+  if (!title) return;
+  const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
+  if (!custPhone) return;
+  const body = `Order ${order.id}`;
+  try {
+    await createInboxRow(custPhone, 'order_update', title, body, order.id);
+  } catch (e) { console.error('[notif] status inbox row failed', e && e.message); }
+  try {
+    const tokens = await store.listDeviceTokens();
+    const custTokens = tokens
+      .filter((rec) => rec && rec.token && normalizePhone(rec.user_phone) === custPhone)
+      .map((rec) => rec.token);
+    if (!custTokens.length) return;
+    const result = await push.sendToStaff(custTokens, {
+      title,
+      body,
+      data: { order_id: String(order.id), type: 'order_update' },
+    });
+    if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) {
+      await store.deleteDeviceTokens(result.invalidTokens);
+    }
+  } catch (e) {
+    console.error('[push] customer status notify failed', e && e.message);
   }
 }
 
@@ -681,6 +769,34 @@ app.post('/api/devices/register', authMiddleware, async (req, res, next) => {
   } catch (err) { return next(err); }
 });
 
+// Notification inbox (fix-batch-30): rows are addressed to one phone
+// only — a caller can never see another user's notifications.
+app.get('/api/notifications', authMiddleware, async (req, res, next) => {
+  try {
+    const phone = normalizePhone(req.user.phone);
+    const [rows, unread] = await Promise.all([
+      store.listNotificationsForPhone(phone, 50),
+      store.unreadCountForPhone(phone),
+    ]);
+    return res.json({ notifications: rows, unread });
+  } catch (err) { return next(err); }
+});
+
+app.post('/api/notifications/:id/read', authMiddleware, async (req, res, next) => {
+  try {
+    const rec = await store.markNotificationRead(req.params.id, normalizePhone(req.user.phone));
+    if (!rec) return res.status(404).json({ error: 'not_found' });
+    return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
+app.post('/api/notifications/read-all', authMiddleware, async (req, res, next) => {
+  try {
+    const count = await store.markAllNotificationsRead(normalizePhone(req.user.phone));
+    return res.json({ ok: true, read: count });
+  } catch (err) { return next(err); }
+});
+
 // Public coupon list — only active coupons, only what a customer needs
 // to pick one (code + value). Private/expired coupons never appear here.
 // Customer phone lists are NEVER sent to customers — only a flag.
@@ -943,6 +1059,8 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     // Staff push alert (fix-batch-29): fire-and-forget — a push failure
     // must never fail or delay the order response.
     notifyStaffOfOrder(order).catch((e) => console.error('[push] staff notify failed', e && e.message));
+    // Inbox rows (fix-batch-30): same fire-and-forget discipline.
+    notifyOrderInbox(order).catch((e) => console.error('[notif] inbox notify failed', e && e.message));
 
     const { screenshot_path: _sp, ...rest } = order;
     void _sp;
@@ -1004,6 +1122,65 @@ app.get('/api/manage/stats', authMiddleware, managerMiddleware, async (_req, res
     ]);
     const revenue = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
     return res.json({ products: products.length, orders: orders.length, users: users.length, revenue });
+  } catch (err) { return next(err); }
+});
+
+// ---------- Manage: Devices & push diagnostics (fix-batch-30) ----------
+// Tokens are shown MASKED (first 8 + … + last 4) — the full FCM token
+// never leaves the server. push_status tells the setup state plainly;
+// test-push sends a real test notification and reports the FCM result
+// honestly (not_configured / invalid key / send error), so a silent
+// push failure can be diagnosed instead of guessed at.
+function maskToken(token) {
+  const s = String(token || '');
+  if (s.length <= 12) return s.slice(0, 4) + '…';
+  return s.slice(0, 8) + '…' + s.slice(-4);
+}
+
+app.get('/api/manage/devices', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try {
+    const tokens = await store.listDeviceTokens();
+    const staffPhones = await staffPhonesSet();
+    return res.json({
+      devices: tokens.map((r) => ({
+        user_phone: r.user_phone,
+        platform: r.platform,
+        last_seen: r.last_seen,
+        created_at: r.created_at,
+        token_masked: maskToken(r.token),
+        is_staff: staffPhones.has(normalizePhone(r.user_phone)),
+      })),
+      push_status: push.pushStatus(),
+    });
+  } catch (err) { return next(err); }
+});
+
+app.post('/api/manage/devices/test-push', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try {
+    const tokens = await store.listDeviceTokens();
+    const staffPhones = await staffPhonesSet();
+    const staffTokens = tokens
+      .filter((rec) => rec && rec.token && staffPhones.has(normalizePhone(rec.user_phone)))
+      .map((rec) => rec.token);
+    if (!staffTokens.length) {
+      return res.json({ ok: false, sent: false, success: 0, failure: 0, reason: 'no_tokens' });
+    }
+    const result = await push.sendToStaff(staffTokens, {
+      title: 'Test Push — Beauty & Me',
+      body: 'Push စမ်းသပ်မှု — ဒီ message မြင်ရင် push အလုပ်လုပ်ပါတယ်',
+      data: { type: 'test_push' },
+    });
+    if (result && Array.isArray(result.invalidTokens) && result.invalidTokens.length) {
+      await store.deleteDeviceTokens(result.invalidTokens);
+    }
+    if (result && result.sent) {
+      return res.json({ ok: true, sent: true, success: result.successCount || 0, failure: result.failureCount || 0, reason: 'ok' });
+    }
+    return res.json({
+      ok: false, sent: false, success: 0, failure: 0,
+      reason: (result && result.reason) || 'send_failed',
+      detail: (result && result.detail) || '',
+    });
   } catch (err) { return next(err); }
 });
 
@@ -1073,6 +1250,11 @@ app.patch('/api/manage/orders/:id', authMiddleware, orderStaffMiddleware, async 
     order.updated_at = new Date().toISOString();
     await store.saveOrder(order);
     await logActivity(req, 'order_status', 'order', order.id, `status: ${oldStatus} → ${status}`);
+    // Customer inbox row + FCM push (fix-batch-30) — only when the status
+    // actually changed; fire-and-forget, never fails the status update.
+    if (status !== oldStatus) {
+      notifyCustomerOfStatus(order, status).catch((e) => console.error('[notif] customer status notify failed', e && e.message));
+    }
     return res.json({ order: adminOrderShape(order) });
   } catch (err) { return next(err); }
 });
