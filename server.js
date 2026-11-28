@@ -1161,6 +1161,7 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
       delivery: { method: deliveryMethod, fee: deliveryFee, note: deliveryNote(deliveryMethod, deliveryFee) },
       payment: { method: paymentMethod, account: payment.account || null },
       coupon_code: coupon ? coupon.code : null,
+      pos_voucher: null,
       screenshot_path: screenshotPath,
       user_id: req.user ? req.user.id : null,
       user_phone: req.user ? req.user.phone : null,
@@ -1203,8 +1204,8 @@ app.get('/api/orders', authMiddleware, async (req, res, next) => {
 });
 
 function stripOrderPrivate(o) {
-  const { screenshot_path: _sp, ...rest } = o;
-  void _sp;
+  const { screenshot_path: _sp, pos_voucher: _pv, ...rest } = o;
+  void _sp; void _pv;
   return rest;
 }
 
@@ -1370,6 +1371,7 @@ app.get('/api/manage/orders', authMiddleware, orderStaffMiddleware, async (req, 
       const needle = String(q).toLowerCase();
       orders = orders.filter((o) =>
         String(o.id || '').toLowerCase().includes(needle) ||
+        String(o.pos_voucher || '').toLowerCase().includes(needle) ||
         String((o.customer && o.customer.name) || '').toLowerCase().includes(needle) ||
         String((o.customer && o.customer.phone) || '').includes(needle));
     }
@@ -1422,6 +1424,29 @@ app.patch('/api/manage/orders/:id', authMiddleware, orderStaffMiddleware, async 
     if (status !== oldStatus) {
       notifyCustomerOfStatus(order, status).catch((e) => console.error('[notif] customer status notify failed', e && e.message));
     }
+    return res.json({ order: adminOrderShape(order) });
+  } catch (err) { return next(err); }
+});
+
+// Staff record the POS voucher number for a website order (fix-batch-46) —
+// the cross-reference between the website order and the voucher cut in
+// UltimatePOS, so staff can find the POS entry from the website order and
+// vice versa (the orders search matches it too). Staff-only, same
+// permission as status/item edits. Empty clears it. Logged in Activity
+// so the owner can see who entered or changed it. Customer-facing views
+// never show it.
+app.patch('/api/manage/orders/:id/pos-voucher', authMiddleware, orderStaffMiddleware, async (req, res, next) => {
+  try {
+    const order = await store.getOrder(req.params.id);
+    if (!order) return res.status(404).json({ error: 'order_not_found' });
+    const raw = req.body && req.body.pos_voucher;
+    const value = raw == null ? '' : String(raw).trim();
+    if (value.length > 100) return res.status(400).json({ error: 'pos_voucher_too_long' });
+    const oldValue = order.pos_voucher || '';
+    order.pos_voucher = value || null;
+    order.updated_at = new Date().toISOString();
+    await store.saveOrder(order);
+    await logActivity(req, 'order_pos_voucher', 'order', order.id, `POS voucher: ${oldValue || '—'} → ${value || '—'}`);
     return res.json({ order: adminOrderShape(order) });
   } catch (err) { return next(err); }
 });
