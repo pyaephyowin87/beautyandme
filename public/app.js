@@ -564,20 +564,57 @@ function appLinkUrl(kind) {
 // A plain m.me link opens messenger.com inside an in-app browser (Muse,
 // Facebook, ...) instead of the app, because those webviews do not hand
 // universal links to the app. The fb-messenger:// deep link IS handed to
-// the app by the OS even from a webview. If the app is not installed the
-// page stays visible, so after a short wait fall back to the web link.
-// Inside the Capacitor app the web fallback opens in the system browser
-// via the Browser plugin, so the app itself never navigates away from
-// the shop.
+// the app by the OS even from a webview.
+// BUG fixed here (fix-batch-45): the old code set window.location.href to
+// the deep link and fell back with window.location.href = webUrl — on iOS
+// the 1200ms fallback fired while Safari was still visible even though
+// the app was opening, so the SHOP TAB itself navigated to messenger.com
+// (and Back then landed on whatever page was before the shop, e.g. the
+// password-reset page). The shop tab must never navigate away: the deep
+// link now fires through a hidden iframe, and the web fallback goes into
+// a blank tab opened inside the tap gesture (so the popup blocker allows
+// it). If the app opened, the page hides and the blank tab closes itself;
+// if not, the blank tab becomes the m.me page.
 function openMessenger(ev) {
   if (ev) ev.preventDefault();
   const webUrl = (state.shopInfo && state.shopInfo.messenger_url) || 'https://m.me/beautyandme117';
-  window.location.href = 'fb-messenger://user-thread/492402784161579';
+  const deepLink = 'fb-messenger://user-thread/492402784161579';
+  const capBrowser = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+  // Inside the Capacitor app the web fallback opens in the system browser
+  // via the Browser plugin, so the app itself never navigates away.
+  if (capBrowser && capBrowser.open) {
+    window.location.href = deepLink;
+    setTimeout(() => { if (!document.hidden) capBrowser.open({ url: webUrl }); }, 1200);
+    return;
+  }
+  // Web: hold a blank tab for the fallback (opened in the tap gesture).
+  let win = null;
+  try { win = window.open('', '_blank', 'noopener'); } catch (e) { win = null; }
+  // Fire the deep link through a hidden iframe — no tab navigation.
+  try {
+    const frame = document.createElement('iframe');
+    frame.style.display = 'none';
+    frame.src = deepLink;
+    document.body.appendChild(frame);
+    setTimeout(() => { try { frame.remove(); } catch (e) {} }, 3000);
+  } catch (e) {}
+  // If the user comes back to the shop later and the blank tab is still
+  // blank (the app opened, but the timer never fired while backgrounded),
+  // close it so no stray tab is left behind.
+  const closeIfBlank = () => {
+    if (!win) return;
+    try { if (win.location && win.location.href === 'about:blank') win.close(); } catch (e) {}
+  };
+  document.addEventListener('visibilitychange', closeIfBlank);
   setTimeout(() => {
+    document.removeEventListener('visibilitychange', closeIfBlank);
     if (!document.hidden) {
-      const capBrowser = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
-      if (capBrowser && capBrowser.open) capBrowser.open({ url: webUrl });
-      else window.location.href = webUrl;
+      // App did not open — the blank tab becomes the web chat.
+      if (win) { try { win.location.href = webUrl; } catch (e) { window.open(webUrl, '_blank', 'noopener'); } }
+      else window.open(webUrl, '_blank', 'noopener');
+    } else {
+      // App opened — close the blank tab we held for the fallback.
+      closeIfBlank();
     }
   }, 1200);
 }
