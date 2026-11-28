@@ -1684,6 +1684,32 @@ app.post('/api/manage/devices/test-push', authMiddleware, managerMiddleware, asy
   } catch (err) { return next(err); }
 });
 
+// ---------- Manage: Email diagnostics (fix-batch-54) ----------
+// They Htar's reset mail never arrived (2026-11-28) even though the code
+// is proven locally — the failure happens inside the Gmail SMTP send and
+// is invisible from outside. These endpoints surface it: the last send
+// attempt (with Gmail's actual error) and a one-tap test mail to the
+// shop's own inbox. The test send races a 20s timer so the admin always
+// gets an answer inside the phone's 25s timeout — a hang comes back as
+// reason 'timeout' instead of a generic error, and the attempt keeps
+// running in the background and records itself when it settles.
+app.get('/api/manage/mail-status', authMiddleware, managerMiddleware, (_req, res) => {
+  return res.json({
+    status: mailer.mailerStatus(),
+    from: mailer.mailFromEmail(),
+    last: mailer.lastSendResult(),
+  });
+});
+app.post('/api/manage/mail-test', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try {
+    const attempt = mailer.sendTestEmail();
+    const timeout = new Promise((resolve) => setTimeout(() => resolve({ sent: false, reason: 'timeout' }), 20000));
+    const result = await Promise.race([attempt, timeout]);
+    attempt.catch(() => {});
+    return res.json({ ok: true, sent: !!result.sent, reason: result.reason || 'ok' });
+  } catch (err) { return next(err); }
+});
+
 // ---------- Manage: Orders (all orders, newest first) ----------
 
 function adminOrderShape(o) {
