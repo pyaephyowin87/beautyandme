@@ -363,6 +363,13 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
 .warn-box{background:#FFF6E5;border:1px solid #F0D9A0;border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;margin:10px 0}
 .masked{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px}
 .row-flex{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* Coupon validity date row (fix-batch-47b): the two datetime fields stack
+   on phones — side-by-side at 16px the iOS date text ("Nov 30, 2026 at
+   12:00 AM") overflows its box. min-width 280px forces a full-width stack
+   in the ~380px phone card; on wider screens they sit side by side. */
+.cp-date-row{display:flex;gap:10px;flex-wrap:wrap}
+.cp-date-row label{flex:1;min-width:280px}
+.cp-date-row input[type=datetime-local]{font-size:13px}
 
 /* ---------- Notifications inbox (fix-batch-30) ---------- */
 .notif-bell{position:relative;padding:10px 12px}

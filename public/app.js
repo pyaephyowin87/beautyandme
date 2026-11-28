@@ -2914,11 +2914,11 @@ async function renderManageCoupons(body) {
     '<button class="btn btn-primary" type="button" id="cpAddBtn">' + esc(t('add')) + '</button>' +
     '</div>' +
     '<div style="margin-top:14px;font-weight:700">' + esc(t('coupon_validity')) + '</div>' +
-    '<div class="row-flex" style="margin-top:6px">' +
-    '<label style="flex:1;min-width:160px"><span style="font-size:13px;color:var(--muted)">' + esc(t('coupon_valid_from')) + '</span>' +
-    '<input id="cpValidFrom" type="datetime-local" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;margin-top:4px"></label>' +
-    '<label style="flex:1;min-width:160px"><span style="font-size:13px;color:var(--muted)">' + esc(t('coupon_valid_until')) + '</span>' +
-    '<input id="cpValidUntil" type="datetime-local" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;margin-top:4px"></label></div>' +
+    '<div class="cp-date-row" style="margin-top:6px">' +
+    '<label style="flex:1;min-width:280px"><span style="font-size:13px;color:var(--muted)">' + esc(t('coupon_valid_from')) + '</span>' +
+    '<input id="cpValidFrom" type="datetime-local" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;margin-top:4px;font-size:13px"></label>' +
+    '<label style="flex:1;min-width:280px"><span style="font-size:13px;color:var(--muted)">' + esc(t('coupon_valid_until')) + '</span>' +
+    '<input id="cpValidUntil" type="datetime-local" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;margin-top:4px;font-size:13px"></label></div>' +
     '<div style="margin-top:4px;font-size:12px;color:var(--muted)">' + esc(t('coupon_validity_hint')) + '</div>' +
     '<div style="margin-top:14px;font-weight:700">' + esc(t('coupon_scope')) + '</div>' +
     '<div style="margin-top:8px;font-size:13px;color:var(--muted)">' + esc(t('scope_brands')) + '</div>' +
