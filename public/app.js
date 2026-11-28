@@ -4082,7 +4082,8 @@ async function openNotificationOrder(btn) {
 function mailLastSendText(last) {
   if (!last) return t('mail_never_sent');
   const when = last.at ? fmtDate(last.at) : '';
-  if (last.sent) return (when ? when + ' — ' : '') + '✓ ' + (last.to || '');
+  const via = last.via === 'gmail-api' ? ' (Gmail API)' : last.via === 'smtp' ? ' (SMTP)' : '';
+  if (last.sent) return (when ? when + ' — ' : '') + '✓ ' + (last.to || '') + via;
   const rk = last.reason === 'timeout' ? 'mail_reason_timeout'
     : last.reason === 'not_configured' ? 'mail_reason_not_configured'
     : 'mail_reason_send_failed';
@@ -4145,8 +4146,9 @@ async function renderManageDevices(body) {
       try {
         const m = await api('/manage/mail-status');
         const st = m.status === 'configured' ? 'mail_configured' : 'mail_not_configured';
+        const modeSuffix = m.mode === 'gmail-api' ? ' · Gmail API' : m.mode === 'smtp' ? ' · SMTP' : '';
         mailWrap.innerHTML =
-          '<div class="line"><span>' + esc(t('mail_status')) + '</span><strong>' + esc(t(st)) + '</strong></div>' +
+          '<div class="line"><span>' + esc(t('mail_status')) + '</span><strong>' + esc(t(st)) + modeSuffix + '</strong></div>' +
           '<div class="line"><span>' + esc(t('mail_from')) + '</span><strong>' + esc(m.from || '—') + '</strong></div>' +
           '<div class="line"><span>' + esc(t('mail_last_send')) + '</span><span>' + esc(mailLastSendText(m.last)) + '</span></div>' +
           '<div style="margin:12px 0"><button class="btn btn-primary" type="button" id="mgTestMailBtn">' + esc(t('mail_test')) + '</button></div>' +
