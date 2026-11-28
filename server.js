@@ -814,6 +814,28 @@ function couponDiscountFor(coupon, items) {
   else d = Math.min(Number(coupon.value) || 0, base);
   return { discount: d, base };
 }
+// Coupon validity window (fix-batch-47): a coupon is usable only while it
+// is active AND the current time is inside [valid_from, valid_until]
+// (either end blank = no limit there). All server checks (public list,
+// validate, order placement, admin apply) use this one helper so they can
+// never disagree. Dates are stored as ISO instants; the Manage form sends
+// Yangon wall time converted to ISO, so no timezone math is needed here.
+function couponValidityState(coupon, nowMs) {
+  if (!coupon || coupon.active === false) return 'inactive';
+  const now = nowMs != null ? nowMs : Date.now();
+  if (coupon.valid_from) {
+    const from = new Date(coupon.valid_from).getTime();
+    if (!Number.isNaN(from) && now < from) return 'upcoming';
+  }
+  if (coupon.valid_until) {
+    const until = new Date(coupon.valid_until).getTime();
+    if (!Number.isNaN(until) && now > until) return 'expired';
+  }
+  return 'active';
+}
+function couponIsUsable(coupon, nowMs) {
+  return couponValidityState(coupon, nowMs) === 'active';
+}
 // Attach resolved product names to coupons (for display only).
 async function withCouponProductNames(list) {
   for (const c of list || []) {
@@ -924,8 +946,11 @@ app.post('/api/notifications/read-all', authMiddleware, async (req, res, next) =
 app.get('/api/coupons', async (_req, res, next) => {
   try {
     const all = await store.listCoupons();
-    const active = all.filter((c) => c && c.active !== false).map((c) => ({
+    // Customers see ONLY currently usable coupons — expired, upcoming and
+    // inactive ones never appear here (fix-batch-47).
+    const active = all.filter((c) => couponIsUsable(c)).map((c) => ({
       code: c.code, type: c.type || 'percent', value: c.value,
+      valid_until: c.valid_until || null,
       brands: Array.isArray(c.brands) ? c.brands : [],
       products: Array.isArray(c.products) ? c.products : [],
       customers_only: Array.isArray(c.customers) && c.customers.length > 0,
@@ -940,6 +965,9 @@ app.post('/api/coupons/validate', async (req, res, next) => {
     const { code, items, phone } = req.body || {};
     const coupon = await store.getCoupon(code);
     if (!coupon || coupon.active === false) return res.json({ valid: false, reason: 'not_found' });
+    const vstate = couponValidityState(coupon);
+    if (vstate === 'upcoming') return res.json({ valid: false, reason: 'not_yet_valid' });
+    if (vstate === 'expired') return res.json({ valid: false, reason: 'expired' });
     if (!couponCustomerEligible(coupon, phone)) return res.json({ valid: false, reason: 'not_for_customer' });
     const scoped = (Array.isArray(coupon.brands) && coupon.brands.length > 0)
       || (Array.isArray(coupon.products) && coupon.products.length > 0);
@@ -1113,7 +1141,7 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     let coupon = null;
     if (coupon_code) {
       coupon = await store.getCoupon(coupon_code);
-      if (!coupon || coupon.active === false) return res.status(400).json({ error: 'invalid_coupon' });
+      if (!coupon || !couponIsUsable(coupon)) return res.status(400).json({ error: 'invalid_coupon' });
       if (!couponCustomerEligible(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
       const calcItems = orderItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
       discount = couponDiscountFor(coupon, calcItems).discount;
@@ -1598,7 +1626,7 @@ app.patch('/api/manage/orders/:id/coupon', authMiddleware, orderStaffMiddleware,
       return res.json({ order: adminOrderShape(order), old_total: oldTotal, new_total: order.total });
     }
     const coupon = await store.getCoupon(code);
-    if (!coupon || coupon.active === false) return res.status(400).json({ error: 'invalid_coupon' });
+    if (!coupon || !couponIsUsable(coupon)) return res.status(400).json({ error: 'invalid_coupon' });
     const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
     if (!couponCustomerEligible(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
     const products = await store.listProducts();
@@ -2232,11 +2260,21 @@ app.get('/api/manage/coupons', authMiddleware, managerMiddleware, async (_req, r
 
 app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
-    const { code, type = 'percent', value, note = '', active = true, brands, products, customers } = req.body || {};
+    const { code, type = 'percent', value, note = '', active = true, brands, products, customers, valid_from, valid_until } = req.body || {};
     if (!code || typeof value !== 'number') return res.status(400).json({ error: 'code_and_value_required' });
     const cleanArr = (v) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []);
+    const cleanDate = (v) => {
+      if (v == null || String(v).trim() === '') return null;
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+    };
+    const fromISO = cleanDate(valid_from);
+    const untilISO = cleanDate(valid_until);
+    if (fromISO === undefined || untilISO === undefined) return res.status(400).json({ error: 'invalid_date' });
+    if (fromISO && untilISO && fromISO > untilISO) return res.status(400).json({ error: 'invalid_date_range' });
     const coupon = {
       code: String(code).toUpperCase(), type, value, note, active: Boolean(active),
+      valid_from: fromISO, valid_until: untilISO,
       brands: cleanArr(brands),
       products: cleanArr(products),
       // Customer scope is stored as normalised phones; invalid ones are dropped.
@@ -2247,6 +2285,10 @@ app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, r
     if (coupon.brands.length) scopeBits.push('brands: ' + coupon.brands.join(', '));
     if (coupon.products.length) scopeBits.push(coupon.products.length + ' products');
     if (coupon.customers.length) scopeBits.push(coupon.customers.length + ' customers');
+    if (coupon.valid_from || coupon.valid_until) {
+      const ygDate = (iso) => new Date(new Date(iso).getTime() + YANGON_OFFSET_MS).toISOString().slice(0, 10);
+      scopeBits.push(`valid ${coupon.valid_from ? ygDate(coupon.valid_from) : '—'} → ${coupon.valid_until ? ygDate(coupon.valid_until) : '—'}`);
+    }
     await logActivity(req, 'coupon_create', 'coupon', coupon.code, `${coupon.type} ${coupon.value}${coupon.type === 'percent' ? '%' : ' Ks'}${scopeBits.length ? ' — ' + scopeBits.join('; ') : ''}`);
     return res.status(201).json(coupon);
   } catch (err) { return next(err); }
