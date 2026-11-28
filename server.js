@@ -827,6 +827,66 @@ function couponDiscountFor(coupon, items, usageMap) {
   else d = Math.min(Number(coupon.value) || 0, base);
   return { discount: d, base };
 }
+// ---------- VIP member card (fix-batch-52) ----------
+// Rules (Pyae, from the page post): spend 350,000 Ks → admin grants a VIP
+// card. VIP gets 5% off anything, 7% at 100,000+, 10% at 200,000+, +3%
+// extra in the birthday month. Sale items are never discounted. Validity
+// is 1 year; renewal is MANUAL by the admin only. Tiers/thresholds change
+// often, so they live in settings (Manage → VIP Settings), not in code.
+const DEFAULT_VIP_SETTINGS = {
+  enabled: true,
+  grant_threshold: 350000,
+  tiers: [{ min: 0, pct: 5 }, { min: 100000, pct: 7 }, { min: 200000, pct: 10 }],
+  birthday_extra_pct: 3,
+  validity_months: 12,
+  renewal_threshold: 200000,
+};
+async function getVipSettings() {
+  const saved = (await store.getSetting('vip_settings')) || {};
+  const tiers = Array.isArray(saved.tiers) && saved.tiers.length ? saved.tiers : DEFAULT_VIP_SETTINGS.tiers;
+  return { ...DEFAULT_VIP_SETTINGS, ...saved, tiers };
+}
+function isVipActive(user, nowMs) {
+  if (!user || !user.is_vip || !user.vip_until) return false;
+  return Date.parse(user.vip_until) > (nowMs || Date.now());
+}
+function vipBirthdayThisMonth(user, nowMs) {
+  if (!user || !user.vip_birthday) return false;
+  const m = String(user.vip_birthday).match(/^\d{4}-(\d{2})-\d{2}$/);
+  if (!m) return false;
+  const now = new Date((nowMs || Date.now()) + YANGON_OFFSET_MS);
+  return Number(m[1]) === now.getUTCMonth() + 1;
+}
+function vipTierPct(settings, eligibleBase) {
+  let pct = 0;
+  for (const tier of settings.tiers || []) {
+    if (eligibleBase >= (Number(tier.min) || 0)) pct = Number(tier.pct) || 0;
+  }
+  return pct;
+}
+// Discount is computed on the ELIGIBLE items only (full-price items).
+// Sale items never get the VIP discount (post rule); option products have
+// no sale price, so they are always eligible. items: [{unit_price, qty, product}]
+function vipDiscountFor(user, items, settings, nowMs) {
+  if (!settings.enabled || !isVipActive(user, nowMs)) return { discount: 0, base: 0, pct: 0 };
+  let base = 0;
+  for (const it of items || []) {
+    const p = it.product;
+    if (!p) continue;
+    if (p.sale_price != null && p.sale_price < p.price) continue;
+    base += it.unit_price * it.qty;
+  }
+  if (base <= 0) return { discount: 0, base: 0, pct: 0 };
+  let pct = vipTierPct(settings, base);
+  if (vipBirthdayThisMonth(user, nowMs)) pct += Number(settings.birthday_extra_pct) || 0;
+  if (pct <= 0) return { discount: 0, base, pct: 0 };
+  return { discount: Math.round((base * pct) / 100), base, pct };
+}
+function addMonthsISO(iso, months) {
+  const d = new Date(iso);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString();
+}
 // Per-product qty caps (fix-batch-49): how many units of each product have
 // already been sold WITH this coupon (non-cancelled orders only). Cancelled
 // orders free their units — the cap is a promo stock, not a lifetime count.
@@ -1119,6 +1179,93 @@ app.post('/api/coupons/validate', async (req, res, next) => {
   } catch (err) { return next(err); }
 });
 
+// ---------- VIP member card (fix-batch-52) ----------
+// The customer's own VIP status + the active tiers (for the VIP card and
+// the cart preview). VIP is granted by the admin only — never automatic.
+app.get('/api/vip', authMiddleware, async (req, res, next) => {
+  try {
+    const settings = await getVipSettings();
+    const u = req.user || {};
+    return res.json({
+      is_vip: isVipActive(u),
+      vip_until: u.vip_until || null,
+      vip_birthday: u.vip_birthday || null,
+      birthday_month: vipBirthdayThisMonth(u),
+      tiers: settings.tiers,
+      birthday_extra_pct: settings.birthday_extra_pct,
+      enabled: settings.enabled !== false,
+    });
+  } catch (err) { return next(err); }
+});
+// VIP discount preview for the cart: same math as at order time, resolved
+// against server-side prices (option price when an option is given).
+app.post('/api/vip/preview', authMiddleware, async (req, res, next) => {
+  try {
+    const settings = await getVipSettings();
+    const u = req.user || {};
+    if (!isVipActive(u)) return res.json({ valid: false, reason: 'not_vip' });
+    const items = (req.body || {}).items;
+    const resolved = [];
+    if (Array.isArray(items)) {
+      for (const it of items) {
+        const product = await store.getProduct(it.product_id);
+        if (!product) continue;
+        let unitPrice = product.sale_price != null && product.sale_price < product.price
+          ? product.sale_price : product.price;
+        if (Array.isArray(product.options) && product.options.length && it.option_label) {
+          const opt = product.options.find((o) => normName(o.label) === normName(it.option_label));
+          if (opt) unitPrice = opt.price;
+        }
+        resolved.push({ unit_price: unitPrice, qty: Math.max(1, Number(it.qty) || 1), product });
+      }
+    }
+    const { discount, base, pct } = vipDiscountFor(u, resolved, settings);
+    if (discount <= 0) return res.json({ valid: false, reason: base <= 0 ? 'no_eligible_items' : 'not_vip', discount: 0, base, pct });
+    return res.json({ valid: true, discount, pct, base, birthday_month: vipBirthdayThisMonth(u), eligible_total: base });
+  } catch (err) { return next(err); }
+});
+
+// VIP settings (Manage → VIP Settings, manager only). The tiers and
+// thresholds change often, so the admin edits them here instead of asking
+// for a code change. Changes apply to FUTURE orders only.
+app.get('/api/manage/vip-settings', authMiddleware, managerMiddleware, async (_req, res, next) => {
+  try { return res.json(await getVipSettings()); } catch (err) { return next(err); }
+});
+app.put('/api/manage/vip-settings', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const cleanInt = (v, fallback) => {
+      const n = Number(v);
+      return Number.isInteger(n) ? n : fallback;
+    };
+    const tiers = Array.isArray(b.tiers) ? b.tiers : null;
+    if (!tiers || !tiers.length || tiers.length > 5) return res.status(400).json({ error: 'invalid_tiers' });
+    const cleanTiers = [];
+    for (const t of tiers) {
+      const min = cleanInt(t.min, -1);
+      const pct = cleanInt(t.pct, -1);
+      if (min < 0 || pct < 0 || pct > 100) return res.status(400).json({ error: 'invalid_tiers' });
+      cleanTiers.push({ min, pct });
+    }
+    cleanTiers.sort((a, b) => a.min - b.min);
+    if (cleanTiers[0].min !== 0) return res.status(400).json({ error: 'invalid_tiers' });
+    for (let i = 1; i < cleanTiers.length; i++) {
+      if (cleanTiers[i].min <= cleanTiers[i - 1].min) return res.status(400).json({ error: 'invalid_tiers' });
+    }
+    const settings = {
+      enabled: b.enabled !== false,
+      grant_threshold: Math.max(0, cleanInt(b.grant_threshold, DEFAULT_VIP_SETTINGS.grant_threshold)),
+      tiers: cleanTiers,
+      birthday_extra_pct: Math.max(0, Math.min(100, cleanInt(b.birthday_extra_pct, DEFAULT_VIP_SETTINGS.birthday_extra_pct))),
+      validity_months: Math.max(1, Math.min(60, cleanInt(b.validity_months, DEFAULT_VIP_SETTINGS.validity_months))),
+      renewal_threshold: Math.max(0, cleanInt(b.renewal_threshold, DEFAULT_VIP_SETTINGS.renewal_threshold)),
+    };
+    await store.setSetting('vip_settings', settings);
+    await logActivity(req, 'vip_settings_update', 'settings', 'vip', `tiers ${settings.tiers.map((t2) => `${t2.pct}% @ ${t2.min}`).join(', ')} · birthday +${settings.birthday_extra_pct}% · validity ${settings.validity_months} mo`);
+    return res.json(settings);
+  } catch (err) { return next(err); }
+});
+
 app.get('/api/payments', async (_req, res, next) => {
   try {
     const accounts = await store.listPayments();
@@ -1264,22 +1411,34 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     // again here — the checkout validate step is not trusted on its own.
     let discount = 0;
     let coupon = null;
+    const calcItems = orderItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
     if (coupon_code) {
       coupon = await store.getCoupon(coupon_code);
       if (await couponRefusalReason(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
       const usageMap = await couponProductUsage(coupon.code);
-      const calcItems = orderItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
       discount = couponDiscountFor(coupon, calcItems, usageMap).discount;
       // A coupon that yields no discount (e.g. every capped unit sold) must
       // not be recorded on the order — it would eat a usage-limit slot.
       if (discount <= 0) return res.status(400).json({ error: 'invalid_coupon' });
       discount = Math.min(discount, subtotal);
     }
+    // VIP member discount (fix-batch-52): only when NO coupon is used — a
+    // VIP discount and a coupon never stack. Computed on full-price items
+    // only; sale items are excluded.
+    let vipDiscount = 0;
+    let vipPct = 0;
+    if (!coupon) {
+      const vipUser = await store.getUserByPhone(custPhone);
+      const vipSettings = await getVipSettings();
+      const v = vipDiscountFor(vipUser, calcItems, vipSettings);
+      vipDiscount = Math.min(v.discount, subtotal);
+      vipPct = v.pct;
+    }
 
     const deliveryFee = DELIVERY_FEES[deliveryMethod];
     // Delivery fee is NEVER added to the total — customer pays the courier
     // on delivery (or picks up in store).
-    const total = subtotal - discount;
+    const total = subtotal - discount - vipDiscount;
 
     // Order id: BM-YYYYMMDD-XXXX.
     const now = new Date();
@@ -1308,6 +1467,8 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
       items: orderItems,
       subtotal,
       discount,
+      vip_discount: vipDiscount,
+      vip_pct: vipPct,
       total,
       delivery_fee: deliveryFee,
       delivery_note: deliveryNote(deliveryMethod, deliveryFee),
@@ -1681,14 +1842,26 @@ app.patch('/api/manage/orders/:id/items', authMiddleware, orderStaffMiddleware, 
     }
     // Re-apply the order's coupon (if any) to the new items.
     let discount = 0;
+    const calcItemsEdit = newItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
     if (order.coupon_code) {
       const coupon = await store.getCoupon(order.coupon_code);
       const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
       if (coupon && coupon.active !== false && couponCustomerEligible(coupon, custPhone)) {
         const usageMap = await couponProductUsage(coupon.code, order.id);
-        const calcItems = newItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
-        discount = couponDiscountFor(coupon, calcItems, usageMap).discount;
+        discount = couponDiscountFor(coupon, calcItemsEdit, usageMap).discount;
       }
+    }
+    // VIP discount (fix-batch-52): re-applied when no coupon is on the
+    // order, so an edited VIP order keeps the right total.
+    let vipDiscount = 0;
+    let vipPct = 0;
+    if (!order.coupon_code) {
+      const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
+      const vipUser = custPhone ? await store.getUserByPhone(custPhone) : null;
+      const vipSettings = await getVipSettings();
+      const v = vipDiscountFor(vipUser, calcItemsEdit, vipSettings);
+      vipDiscount = Math.min(v.discount, subtotal);
+      vipPct = v.pct;
     }
     const oldTotal = order.total;
     // Website stock: move it by the quantity delta per line.
@@ -1710,7 +1883,9 @@ app.patch('/api/manage/orders/:id/items', authMiddleware, orderStaffMiddleware, 
     order.items = newItems;
     order.subtotal = subtotal;
     order.discount = discount;
-    order.total = subtotal - discount;
+    order.vip_discount = vipDiscount;
+    order.vip_pct = vipPct;
+    order.total = subtotal - discount - vipDiscount;
     order.updated_at = new Date().toISOString();
     await store.saveOrder(order);
     // Change summary for the activity log.
@@ -1748,7 +1923,17 @@ app.patch('/api/manage/orders/:id/coupon', authMiddleware, orderStaffMiddleware,
       if (!order.coupon_code) return res.json({ order: adminOrderShape(order), old_total: oldTotal, new_total: oldTotal });
       order.coupon_code = null;
       order.discount = 0;
-      order.total = order.subtotal;
+      // Coupon removed — the VIP discount comes back (fix-batch-52).
+      const rmPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
+      const vipUser = rmPhone ? await store.getUserByPhone(rmPhone) : null;
+      const vipSettings = await getVipSettings();
+      const rmProducts = await store.listProducts();
+      const rmById = new Map(rmProducts.map((p) => [p.id, p]));
+      const vCalcItems = (order.items || []).map((oi) => ({ unit_price: oi.unit_price, qty: oi.qty, product: rmById.get(oi.product_id) }));
+      const v = vipDiscountFor(vipUser, vCalcItems, vipSettings);
+      order.vip_discount = Math.min(v.discount, order.subtotal);
+      order.vip_pct = v.pct;
+      order.total = order.subtotal - order.vip_discount;
       order.updated_at = new Date().toISOString();
       await store.saveOrder(order);
       await logActivity(req, 'order_coupon', 'order', order.id, `coupon removed — total: ${oldTotal} → ${order.total} Ks`);
@@ -1766,6 +1951,9 @@ app.patch('/api/manage/orders/:id/coupon', authMiddleware, orderStaffMiddleware,
     if (discount <= 0) return res.status(400).json({ error: 'no_eligible_items' });
     order.coupon_code = coupon.code;
     order.discount = discount;
+    // A coupon replaces the VIP discount — they never stack (fix-batch-52).
+    order.vip_discount = 0;
+    order.vip_pct = 0;
     order.total = order.subtotal - discount;
     order.updated_at = new Date().toISOString();
     await store.saveOrder(order);
@@ -1833,9 +2021,15 @@ app.get('/api/manage/users', authMiddleware, managerMiddleware, async (req, res,
     const extraStaff = (await store.getSetting('sale_staff')) || [];
     const [users, orders] = await Promise.all([store.listUsers(), store.listOrders()]);
     const orderCount = {};
+    // Lifetime total (fix-batch-52): non-cancelled orders only — the admin
+    // uses it to see who has reached the VIP grant threshold.
+    const lifetimeTotal = {};
     for (const o of orders) {
       const key = (o.customer && o.customer.phone) || o.user_phone || '';
-      if (key) orderCount[key] = (orderCount[key] || 0) + 1;
+      if (key) {
+        orderCount[key] = (orderCount[key] || 0) + 1;
+        if (o.status !== 'cancelled') lifetimeTotal[key] = (lifetimeTotal[key] || 0) + (Number(o.total) || 0);
+      }
     }
     let list = users.map((u) => ({
       id: u.id,
@@ -1845,6 +2039,10 @@ app.get('/api/manage/users', authMiddleware, managerMiddleware, async (req, res,
       is_manager: u.phone === MANAGER_PHONE || (Array.isArray(extraManagers) && extraManagers.includes(u.phone)),
       is_sale_staff: Array.isArray(extraStaff) && extraStaff.includes(u.phone),
       orders_count: orderCount[u.phone] || 0,
+      lifetime_total: lifetimeTotal[u.phone] || 0,
+      is_vip: !!u.is_vip,
+      vip_until: u.vip_until || null,
+      vip_birthday: u.vip_birthday || null,
       created_at: u.created_at || null,
     }));
     list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
@@ -1882,6 +2080,59 @@ app.patch('/api/manage/users/:phone/password', authMiddleware, managerMiddleware
     // Never log the password itself — only that it was reset, and for whom.
     await logActivity(req, 'password_reset', 'user', phone, `password reset for ${user.name || phone}`);
     return res.json({ ok: true });
+  } catch (err) { return next(err); }
+});
+
+// ---------- VIP member card (fix-batch-52) ----------
+// Grant / revoke VIP (admin only, manual — never automatic). Granting sets
+// vip_until to now + validity_months when the card is not currently active;
+// an active card keeps its expiry. Birthday is admin-only (the customer
+// must not be able to change it and take the birthday extra every month).
+app.patch('/api/manage/users/:phone/vip', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const phone = normalizePhone(req.params.phone);
+    const user = await store.getUserByPhone(phone);
+    if (!user) return res.status(404).json({ error: 'user_not_found' });
+    const b = req.body || {};
+    const settings = await getVipSettings();
+    const wasActive = isVipActive(user);
+    if (b.vip_birthday !== undefined) {
+      const v = String(b.vip_birthday || '').trim();
+      if (v !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return res.status(400).json({ error: 'invalid_birthday' });
+      user.vip_birthday = v || null;
+    }
+    if (b.is_vip !== undefined) {
+      user.is_vip = !!b.is_vip;
+      if (user.is_vip && !isVipActive(user)) {
+        user.vip_until = addMonthsISO(new Date().toISOString(), settings.validity_months);
+      }
+    }
+    await store.saveUser(user);
+    if (user.is_vip && !wasActive) {
+      await createInboxRow(phone, 'vip_granted', 'VIP Member ဖြစ်သွားပါပြီ 🎉', `Beauty & Me VIP Card ရသွားပါပြီ — ဝယ်တိုင်း လျှော့ဈေး ရပါတယ်။ သက်တမ်း: ${user.vip_until ? user.vip_until.slice(0, 10) : '—'} အထိ။`, null);
+      await logActivity(req, 'vip_grant', 'user', phone, `${user.name || phone} — VIP until ${user.vip_until ? user.vip_until.slice(0, 10) : '—'}`);
+    } else if (!user.is_vip && wasActive) {
+      await logActivity(req, 'vip_revoke', 'user', phone, `${user.name || phone} — VIP revoked`);
+    }
+    return res.json({ phone: user.phone, is_vip: !!user.is_vip, vip_until: user.vip_until || null, vip_birthday: user.vip_birthday || null });
+  } catch (err) { return next(err); }
+});
+// Extend a VIP card by one validity period (admin only, manual). Extending
+// from the current expiry (not from today) so remaining days are not lost;
+// an expired card restarts from today.
+app.post('/api/manage/users/:phone/vip-extend', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const phone = normalizePhone(req.params.phone);
+    const user = await store.getUserByPhone(phone);
+    if (!user) return res.status(404).json({ error: 'user_not_found' });
+    if (!user.is_vip) return res.status(400).json({ error: 'not_vip' });
+    const settings = await getVipSettings();
+    const base = user.vip_until && Date.parse(user.vip_until) > Date.now() ? user.vip_until : new Date().toISOString();
+    user.vip_until = addMonthsISO(base, settings.validity_months);
+    await store.saveUser(user);
+    await createInboxRow(phone, 'vip_renewed', 'VIP သက်တမ်း တိုးသွားပါပြီ 🎉', `Beauty & Me VIP Card သက်တမ်း ${user.vip_until.slice(0, 10)} အထိ တိုးသွားပါပြီ။`, null);
+    await logActivity(req, 'vip_extend', 'user', phone, `${user.name || phone} — VIP until ${user.vip_until.slice(0, 10)}`);
+    return res.json({ phone: user.phone, is_vip: true, vip_until: user.vip_until, vip_birthday: user.vip_birthday || null });
   } catch (err) { return next(err); }
 });
 
