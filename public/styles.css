@@ -409,6 +409,8 @@ main{max-width:1024px;margin:0 auto;padding:0 12px 24px}
   background:var(--ink); color:#fff; padding:11px 18px; border-radius:999px; font-size:14px;
   max-width:90vw; text-align:center; box-shadow:0 4px 16px rgba(0,0,0,.3);
 }
+/* VIP card (fix-batch-52): pink-purple member card on My Account. */
+.vip-card{background:linear-gradient(135deg,#D7427E,#934994);color:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 4px 14px rgba(147,73,148,.35)}
 /* Barcode scanner modal (fix-batch-51): full-screen overlay; the library
    injects its own video element into #scanReader. */
 .scan-modal{display:none;position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:16px}

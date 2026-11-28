@@ -160,6 +160,7 @@ const I18N = {
     coupon_usage_limit: 'လူ limit (ယောက်)', coupon_usage_limit_hint: 'မဖြည့်ရင် ကန့်သတ်ချက် မရှိ', coupon_new_customer_only: 'Customer အသစ်တွေအတွက်ပဲ', coupon_limit_reached: 'ဒီ coupon limit ပြည့်သွားပါပြီ', coupon_not_new_customer: 'ဒီ coupon က customer အသစ်တွေအတွက်ပဲ သုံးလို့ရပါတယ်', coupon_phone_required: 'ဖုန်း နံပါတ် ထည့်ပြီးမှ ဒီ coupon သုံးလို့ရပါတယ်', coupon_limit_prefix: 'လူ', coupon_limit_suffix: 'ယောက်ပဲ သုံးလို့ရတယ်', coupon_new_only_tag: 'Customer အသစ်တွေအတွက်ပဲ', coupon_used_label: 'သုံးထားတာ', coupon_vouchers: 'စောင်', coupon_discount_given: 'လျှော့ပေးပြီးသား', coupon_edit: 'ပြင်မယ်', action_coupon_update: 'Coupon ပြင်တယ်',
     coupon_product_qty: 'Qty limit', coupon_product_qty_hint: 'ပစ္စည်း တစ်ခု ချင်းစီ ဘေးက box မှာ အရေအတွက် ထည့်လို့ရတယ် — မဖြည့်ရင် ကန့်သတ်ချက် မရှိ', coupon_qty_cap_suffix: 'ခုထိပဲ', coupon_qty_sold: 'ခု ရောင်းပြီးသား',
     coupon_stackable: 'Sale ပစ္စည်းနဲ့ ထပ်သုံးလို့ရတယ်', coupon_stackable_hint: 'ပိတ်ထားရင် sale ဈေး ရှိနေတဲ့ ပစ္စည်းတွေကို coupon လျှော့မပေးဘူး', coupon_not_stackable: 'Sale ပစ္စည်းတွေ မပါဘူး',
+    vip: 'VIP', vip_member: 'VIP Member', vip_card: 'VIP Card', vip_valid_until: 'သက်တမ်း', vip_expired: 'သက်တမ်း ကုန်သွားပါပြီ', vip_expiring_soon: 'သက်တမ်း ကုန်တော့မယ် — 200,000 ဖိုး ဝယ်ရင် သက်တမ်း တိုးမယ်', vip_discount: 'VIP လျှော့ဈေး', vip_birthday: 'မွေးနေ့', vip_birthday_month: 'မွေးနေ့လ အပို လျှော့ဈေး', vip_grant: 'VIP ပေးမယ်', vip_revoke: 'VIP ဖြုတ်မယ်', vip_extend: 'သက်တမ်း +၁ နှစ် တိုးမယ်', vip_settings: 'VIP Settings', vip_lifetime: 'စုစုပေါင်း ဝယ်ထားတာ', vip_grant_threshold: 'VIP ဖြစ်ဖို့ amount', vip_renewal_threshold: 'သက်တမ်း တိုးဖို့ amount', vip_validity_months: 'သက်တမ်း (လ)', vip_birthday_extra: 'မွေးနေ့ အပို %', vip_enabled: 'VIP အစီအစဉ် ဖွင့်ထားတယ်', vip_days_left: 'ရက် ကျန်တယ်', vip_granted: 'VIP ပေးလိုက်ပါပြီ', vip_extended: 'သက်တမ်း တိုးလိုက်ပါပြီ', vip_not_vip: 'VIP မဟုတ်ပါ', vip_tier_hint: 'Tier 1 က အမြဲ 0 Ks ကစတယ် — amount ကြီးလာတိုင်း % များလာရမယ်', action_vip_grant: 'VIP ပေးတယ်', action_vip_revoke: 'VIP ဖြုတ်တယ်', action_vip_extend: 'VIP သက်တမ်း တိုးတယ်', action_vip_settings_update: 'VIP settings ပြင်တယ်',
     sku: 'SKU / Barcode', scan: 'Scan', scan_title: 'Barcode စကင်ဖတ်မယ်', scan_hint: 'Barcode ကို ကင်မရာ ဘောင်ထဲ ထည့်ပြပါ', scan_failed: 'ဖတ်မရပါ — လက်နဲ့ ရိုက်ထည့်ပါ', duplicate_sku: 'ဒီ barcode ရှိပြီးသား ဖြစ်နေပါတယ်',
     coupon_no_eligible_items: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ ပစ္စည်း / brand တွေအတွက်ပဲ သုံးလို့ရပါတယ် — cart ထဲမှာ အဲဒါတွေ မရှိသေးပါ',
     search_products_ph: 'ပစ္စည်း ရှာပါ…', no_products_found: 'ပစ္စည်း မတွေ့ပါ',
@@ -331,6 +332,7 @@ const I18N = {
     coupon_usage_limit: 'People limit', coupon_usage_limit_hint: 'Leave blank for no limit', coupon_new_customer_only: 'New customers only', coupon_limit_reached: 'This coupon has reached its usage limit', coupon_not_new_customer: 'This coupon is only for new customers', coupon_phone_required: 'Enter your phone number to use this coupon', coupon_limit_prefix: 'First', coupon_limit_suffix: 'people only', coupon_new_only_tag: 'New customers only', coupon_used_label: 'Used', coupon_vouchers: 'vouchers', coupon_discount_given: 'Discount given', coupon_edit: 'Edit', action_coupon_update: 'Updated a coupon',
     coupon_product_qty: 'Qty limit', coupon_product_qty_hint: 'Set a qty per product in the box beside it — leave blank for no limit', coupon_qty_cap_suffix: 'units max', coupon_qty_sold: 'sold',
     coupon_stackable: 'Stacks with sale items', coupon_stackable_hint: 'When off, items already on sale get no coupon discount', coupon_not_stackable: 'Sale items excluded',
+    vip: 'VIP', vip_member: 'VIP Member', vip_card: 'VIP Card', vip_valid_until: 'Valid until', vip_expired: 'Membership expired', vip_expiring_soon: 'Expiring soon — spend 200,000 Ks to renew', vip_discount: 'VIP discount', vip_birthday: 'Birthday', vip_birthday_month: 'Birthday month extra', vip_grant: 'Make VIP', vip_revoke: 'Remove VIP', vip_extend: 'Extend 1 year', vip_settings: 'VIP Settings', vip_lifetime: 'Lifetime total', vip_grant_threshold: 'VIP grant amount', vip_renewal_threshold: 'Renewal amount', vip_validity_months: 'Validity (months)', vip_birthday_extra: 'Birthday extra %', vip_enabled: 'VIP program enabled', vip_days_left: 'days left', vip_granted: 'VIP granted', vip_extended: 'Validity extended', vip_not_vip: 'Not VIP', vip_tier_hint: 'Tier 1 always starts at 0 Ks — % should grow with the amount', action_vip_grant: 'Granted VIP', action_vip_revoke: 'Revoked VIP', action_vip_extend: 'Extended VIP', action_vip_settings_update: 'Updated VIP settings',
     sku: 'SKU / Barcode', scan: 'Scan', scan_title: 'Scan barcode', scan_hint: 'Point the camera at the barcode', scan_failed: "Couldn't read it — type it in", duplicate_sku: 'This barcode is already used',
     coupon_no_eligible_items: 'This coupon only applies to selected products / brands — none are in your cart yet',
     search_products_ph: 'Search products…', no_products_found: 'No products found',
@@ -363,6 +365,7 @@ const state = {
   wishlist: JSON.parse(localStorage.getItem('bm_wishlist') || '[]'),
   sectionFilter: '',
   coupon: JSON.parse(localStorage.getItem('bm_coupon') || 'null'),
+  vipPreview: null,
   brands: [],
   brandFilter: '',
   types: [],
@@ -580,7 +583,40 @@ function yangonInputToISO(v) {
   const d = new Date(String(v).trim() + ':00+06:30');
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-function cartTotal() { return Math.max(0, cartSubtotal() - couponDiscount()); }
+function cartTotal() { return Math.max(0, cartSubtotal() - couponDiscount() - vipDiscount()); }
+// VIP discount (fix-batch-52): server-computed preview; a coupon always
+// wins over VIP, so the VIP line is 0 while a coupon is applied.
+function vipDiscount() {
+  if (state.coupon) return 0;
+  return (state.vipPreview && state.vipPreview.discount) || 0;
+}
+let vipPreviewTimer = null;
+let vipPreviewSeq = 0;
+function refreshVipPreview() {
+  clearTimeout(vipPreviewTimer);
+  vipPreviewTimer = setTimeout(doRefreshVipPreview, 350);
+}
+async function doRefreshVipPreview() {
+  const seq = ++vipPreviewSeq;
+  if (!state.user || state.coupon || !state.cart.length) { state.vipPreview = null; paintVipRow(); return; }
+  try {
+    const res = await api('/vip/preview', { method: 'POST', body: JSON.stringify({ items: state.cart.map((i) => ({ product_id: i.product_id, qty: i.qty, option_label: i.option_label || undefined })) }) });
+    if (seq !== vipPreviewSeq) return;
+    state.vipPreview = (res && res.valid) ? { discount: res.discount, pct: res.pct } : null;
+  } catch (e) { if (seq === vipPreviewSeq) state.vipPreview = null; }
+  paintVipRow();
+}
+function paintVipRow() {
+  const row = $('#cartVipRow');
+  if (!row) return;
+  const d = vipDiscount();
+  row.hidden = d <= 0;
+  $('#cartVipDiscount').textContent = '−' + fmt(d);
+  const lbl = $('#lblVipDiscount');
+  if (lbl) lbl.textContent = t('vip_discount') + (state.vipPreview && state.vipPreview.pct ? ' ' + state.vipPreview.pct + '%' : '');
+  const total = $('#cartTotal');
+  if (total) total.textContent = fmt(cartTotal());
+}
 function updateCartBadge() {
   const n = cartCount();
   const badge = $('#navCartCount');
@@ -1167,6 +1203,8 @@ function renderCart() {
   const disc = couponDiscount();
   $('#cartDiscountRow').hidden = disc <= 0;
   $('#cartDiscount').textContent = '−' + fmt(disc);
+  paintVipRow();
+  refreshVipPreview();
   $('#cartTotal').textContent = fmt(cartTotal());
   $('#checkoutBtn').disabled = state.cart.length === 0;
   const cm = $('#couponMsg');
@@ -1313,6 +1351,7 @@ async function openCheckout() {
     '<div class="checkout-card"><h3>' + esc(t('total')) + '</h3>' +
     '<div class="order-summary-line"><span>' + esc(t('subtotal')) + '</span><span>' + fmt(cartSubtotal()) + '</span></div>' +
     (couponDiscount() > 0 ? '<div class="order-summary-line"><span>' + esc(t('discount')) + ' (' + esc(state.coupon.code) + ')</span><span>−' + fmt(couponDiscount()) + '</span></div>' : '') +
+    (vipDiscount() > 0 ? '<div class="order-summary-line"><span>' + esc(t('vip_discount')) + (state.vipPreview && state.vipPreview.pct ? ' ' + state.vipPreview.pct + '%' : '') + '</span><span>−' + fmt(vipDiscount()) + '</span></div>' : '') +
     '<div class="order-summary-line grand"><span>' + esc(t('total')) + '</span><span>' + fmt(cartTotal()) + '</span></div>' +
     '<div class="delivery-line" id="coDeliveryLine">' + esc(t(DELIVERY[state.co.delivery].noteKey)) + '</div>' +
     '</div>' +
@@ -1729,6 +1768,7 @@ function renderAccount() {
   }
   const u = state.user;
   body.innerHTML =
+    '<div id="vipCardWrap"></div>' +
     '<div class="checkout-card">' +
     '<div class="kv-row"><span>' + esc(t('name')) + '</span><strong>' + esc(u.name || '') + '</strong></div>' +
     '<div class="kv-row"><span>' + esc(t('phone')) + '</span><strong>' + esc(u.phone || '') + '</strong></div>' +
@@ -1755,6 +1795,30 @@ function renderAccount() {
   $('#accountLogoutBtn').addEventListener('click', () => { if (window.confirm(t('logout') + '?')) logout(); });
   $('#acctEmailBtn').addEventListener('click', saveAccountEmail);
   $('#pwChangeBtn').addEventListener('click', changePassword);
+  loadVipCard();
+}
+// VIP card on My Account (fix-batch-52): pink-purple card with the member
+// name, validity end + days left, an expiring-soon warning (30 days), and
+// the birthday-month extra. Shown only for members (or expired members).
+async function loadVipCard() {
+  const wrap = $('#vipCardWrap');
+  if (!wrap || !state.user) return;
+  let v = null;
+  try { v = await api('/vip'); } catch (e) { wrap.innerHTML = ''; return; }
+  if (!v || (!v.is_vip && !v.vip_until)) { wrap.innerHTML = ''; return; }
+  const until = v.vip_until ? v.vip_until.slice(0, 10) : '—';
+  const daysLeft = v.vip_until ? Math.ceil((new Date(v.vip_until).getTime() - Date.now()) / 86400000) : null;
+  const expired = !v.is_vip;
+  const soon = v.is_vip && daysLeft != null && daysLeft <= 30;
+  wrap.innerHTML = '<div class="vip-card">' +
+    '<div style="font-size:15px;font-weight:700">💎 ' + esc(t('vip_member')) + '</div>' +
+    '<div style="font-size:13px;margin-top:4px">' + esc(state.user.name || '') + '</div>' +
+    '<div style="font-size:12px;margin-top:8px;opacity:.92">' + esc(t('vip_valid_until')) + ': ' + esc(until) +
+    (v.is_vip && daysLeft != null ? ' · ' + daysLeft + ' ' + esc(t('vip_days_left')) : '') + '</div>' +
+    (expired ? '<div style="font-size:12px;margin-top:6px;font-weight:700">' + esc(t('vip_expired')) + '</div>' : '') +
+    (soon ? '<div style="font-size:12px;margin-top:6px;font-weight:700">' + esc(t('vip_expiring_soon')) + '</div>' : '') +
+    (v.birthday_month && v.is_vip ? '<div style="font-size:12px;margin-top:6px">🎂 ' + esc(t('vip_birthday_month')) + ' +' + (v.birthday_extra_pct || 0) + '%</div>' : '') +
+    '</div>';
 }
 async function saveAccountEmail() {
   const msg = $('#acctEmailMsg');
@@ -1889,6 +1953,7 @@ function loadManage(tab) {
   else if (tab === 'users') renderManageUsers(body);
   else if (tab === 'catalog') renderManageCatalog(body);
   else if (tab === 'coupons') renderManageCoupons(body);
+  else if (tab === 'vip') renderManageVip(body);
   else if (tab === 'banner') renderManageBanner(body);
   else if (tab === 'payments') renderManagePayments(body);
   else if (tab === 'applink') renderManageAppLinks(body);
@@ -2312,6 +2377,14 @@ async function loadMgUsers(reset) {
       (u.is_manager && !u.is_owner ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('manager')) + '</span>' : '') +
       (u.is_sale_staff && !u.is_owner && !u.is_manager ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('sale_staff')) + '</span>' : '') +
       '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-top:4px">' + esc(t('vip_lifetime')) + ': ' + fmt(u.lifetime_total || 0) +
+      (u.is_vip ? ' · 💎 ' + esc(t('vip_member')) + (u.vip_until ? ' — ' + esc(t('vip_valid_until')) + ' ' + esc(u.vip_until.slice(0, 10)) : '') : '') + '</div>' +
+      '<div class="row-flex" style="margin-top:8px;flex-wrap:wrap">' +
+      '<button type="button" class="btn btn-outline" data-vipgrant="' + esc(u.phone) + '" data-isvip="' + (u.is_vip ? '1' : '0') + '">' + esc(u.is_vip ? t('vip_revoke') : t('vip_grant')) + '</button>' +
+      (u.is_vip ? '<button type="button" class="btn btn-outline" data-vipextend="' + esc(u.phone) + '">' + esc(t('vip_extend')) + '</button>' : '') +
+      '<input type="date" value="' + esc(u.vip_birthday || '') + '" data-vipbday="' + esc(u.phone) + '" title="' + esc(t('vip_birthday')) + '" style="padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">' +
+      '<button type="button" class="btn btn-outline" data-vipbdaysave="' + esc(u.phone) + '">' + esc(t('save')) + '</button>' +
+      '</div>' +
       '<div class="row-flex" style="margin-top:10px;flex-wrap:wrap">' +
       '<button type="button" class="btn btn-outline" data-mgpw="' + esc(u.phone) + '">' + esc(t('set_password')) + '</button>' +
       (isOwner && !u.is_owner ? '<button type="button" class="btn btn-outline" data-mgmgr="' + esc(u.phone) + '" data-ismgr="' + (u.is_manager ? '1' : '0') + '">' + esc(u.is_manager ? t('remove_manager') : t('make_manager')) + '</button>' : '') +
@@ -2337,6 +2410,35 @@ async function loadMgUsers(reset) {
         if (form) form.hidden = true;
         if (inp) inp.value = '';
       } catch (e) { toast(e.status === 403 ? t('owner_only') : t('error_load')); }
+    }));
+    // VIP controls (fix-batch-52): grant/revoke + birthday (admin-only) +
+    // manual 1-year extension. The user list reloads so the badge, expiry
+    // and lifetime total stay in sync.
+    $$('[data-vipgrant]', wrap).forEach((b) => b.addEventListener('click', async () => {
+      const makeVip = b.dataset.isvip !== '1';
+      if (makeVip && !window.confirm(t('vip_grant') + ' — ' + b.dataset.vipgrant + '?')) return;
+      try {
+        await api('/manage/users/' + encodeURIComponent(b.dataset.vipgrant) + '/vip', { method: 'PATCH', body: JSON.stringify({ is_vip: makeVip }) });
+        toast(t(makeVip ? 'vip_granted' : 'saved'));
+        loadMgUsers(true);
+      } catch (e) { toast(t('error_load')); }
+    }));
+    $$('[data-vipextend]', wrap).forEach((b) => b.addEventListener('click', async () => {
+      if (!window.confirm(t('vip_extend') + ' — ' + b.dataset.vipextend + '?')) return;
+      try {
+        await api('/manage/users/' + encodeURIComponent(b.dataset.vipextend) + '/vip-extend', { method: 'POST', body: JSON.stringify({}) });
+        toast(t('vip_extended'));
+        loadMgUsers(true);
+      } catch (e) { toast(t('error_load')); }
+    }));
+    $$('[data-vipbdaysave]', wrap).forEach((b) => b.addEventListener('click', async () => {
+      const inp = wrap.querySelector('[data-vipbday="' + b.dataset.vipbdaysave + '"]');
+      const val = inp ? inp.value.trim() : '';
+      try {
+        await api('/manage/users/' + encodeURIComponent(b.dataset.vipbdaysave) + '/vip', { method: 'PATCH', body: JSON.stringify({ vip_birthday: val || null }) });
+        toast(t('saved'));
+        loadMgUsers(true);
+      } catch (e) { toast(t('error_load')); }
     }));
     $$('[data-mgmgr]', wrap).forEach((b) => b.addEventListener('click', async () => {
       try {
@@ -3254,6 +3356,56 @@ async function renderManageCoupons(body) {
   load();
 }
 /* ---------------- manage: hero banner (fix-batch-44) ---------------- */
+/* ---------------- manage: VIP settings ---------------- */
+// VIP program rules (fix-batch-52): the tiers and thresholds change often,
+// so the admin edits them here. Saved to settings; future orders use the
+// new values, placed orders keep theirs.
+async function renderManageVip(body) {
+  body.innerHTML = '<div class="mg-card"><h3>' + esc(t('vip_settings')) + '</h3><div id="vipSettingsWrap"><div class="loading">' + esc(t('loading')) + '</div></div></div>';
+  const wrap = $('#vipSettingsWrap');
+  let s;
+  try { s = await api('/manage/vip-settings'); } catch (e) { wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>'; return; }
+  const tiers = (s.tiers || []).slice(0, 5);
+  while (tiers.length < 3) tiers.push({ min: 0, pct: 0 });
+  wrap.innerHTML =
+    '<div class="field"><label><input type="checkbox" id="vipEnabled"' + (s.enabled !== false ? ' checked' : '') + '> ' + esc(t('vip_enabled')) + '</label></div>' +
+    '<div class="field"><label>' + esc(t('vip_grant_threshold')) + ' (Ks)</label><input id="vipGrant" type="number" min="0" step="1000" value="' + (s.grant_threshold || 0) + '"></div>' +
+    '<div class="field"><label>' + esc(t('vip_renewal_threshold')) + ' (Ks)</label><input id="vipRenewal" type="number" min="0" step="1000" value="' + (s.renewal_threshold || 0) + '"></div>' +
+    '<div class="field"><label>' + esc(t('vip_validity_months')) + '</label><input id="vipValidity" type="number" min="1" max="60" step="1" value="' + (s.validity_months || 12) + '"></div>' +
+    '<div class="field"><label>' + esc(t('vip_birthday_extra')) + '</label><input id="vipBdayExtra" type="number" min="0" max="100" step="1" value="' + (s.birthday_extra_pct || 0) + '"></div>' +
+    '<div style="font-size:13px;font-weight:700;margin:12px 0 6px">' + esc(t('vip')) + ' %</div>' +
+    tiers.map((tier, i) =>
+      '<div class="row-flex" style="margin-top:6px;align-items:center"><span style="min-width:52px;font-size:13px">Tier ' + (i + 1) + '</span>' +
+      '<input type="number" min="0" step="1000" data-vipmin="' + i + '" value="' + tier.min + '" placeholder="Ks" style="flex:1;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;min-width:0">' +
+      '<input type="number" min="0" max="100" step="1" data-vippct="' + i + '" value="' + tier.pct + '" placeholder="%" style="width:84px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">%</div>').join('') +
+    '<div class="hint" style="margin-top:8px">' + esc(t('vip_tier_hint')) + '</div>' +
+    '<div class="error-box" id="vipSettingsError" hidden></div>' +
+    '<button class="btn btn-primary btn-block" type="button" id="vipSettingsSave" style="margin-top:12px">' + esc(t('save')) + '</button>';
+  $('#vipSettingsSave').addEventListener('click', async () => {
+    const err = $('#vipSettingsError'); err.hidden = true;
+    const newTiers = $$('[data-vipmin]').map((inp, i) => ({
+      min: Number(inp.value),
+      pct: Number(document.querySelector('[data-vippct="' + i + '"]').value),
+    }));
+    const btn = $('#vipSettingsSave'); btn.disabled = true;
+    try {
+      await api('/manage/vip-settings', { method: 'PUT', body: JSON.stringify({
+        enabled: $('#vipEnabled').checked,
+        grant_threshold: Number($('#vipGrant').value),
+        renewal_threshold: Number($('#vipRenewal').value),
+        validity_months: Number($('#vipValidity').value),
+        birthday_extra_pct: Number($('#vipBdayExtra').value),
+        tiers: newTiers,
+      }) });
+      toast(t('saved'));
+      loadManage('vip');
+    } catch (e) {
+      btn.disabled = false;
+      err.textContent = t('error_load');
+      err.hidden = false;
+    }
+  });
+}
 async function renderManageBanner(body) {
   body.innerHTML =
     '<div class="mg-card">' +
