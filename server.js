@@ -741,8 +741,23 @@ app.post('/api/auth/forgot-send', async (req, res, next) => {
     });
     const proto = req.get('x-forwarded-proto') || req.protocol;
     const resetUrl = `${proto}://${req.get('host')}/reset.html?token=${raw}`;
-    const result = await mailer.sendResetEmail({ to: targetEmail, name: user.name, resetUrl });
-    return res.json({ ok: true, mail_configured: result.sent, masked_email: maskEmail(targetEmail) });
+    // Fix-batch-53: the Gmail SMTP send can take longer than the phone's
+    // 25s timeout (cold free instance + slow SMTP handshake) — the request
+    // then fails with a generic error even though nothing is wrong with the
+    // code (proven live 2026-11-28 for They Htar: two attempts, no mail).
+    // So the email goes out in the BACKGROUND and the customer gets the
+    // answer right away. mail_configured now means "mail is set up", not
+    // "this send succeeded" — a failed background send is logged
+    // server-side (mailer logs it) and the customer can retry or call the
+    // shop. The token is already saved, so the link works when the mail
+    // lands.
+    const configured = mailer.isMailConfigured();
+    if (configured) {
+      mailer.sendResetEmail({ to: targetEmail, name: user.name, resetUrl }).catch((err) => {
+        console.log(`[forgot] background reset email failed for ${targetEmail}: ${err && err.message}`);
+      });
+    }
+    return res.json({ ok: true, mail_configured: configured, masked_email: maskEmail(targetEmail) });
   } catch (err) { return next(err); }
 });
 
