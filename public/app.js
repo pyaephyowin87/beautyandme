@@ -2990,7 +2990,7 @@ async function renderManageCoupons(body) {
     '<div class="row-flex" style="margin-top:6px"><input id="cpUsageLimit" type="number" min="1" placeholder="' + esc(t('coupon_usage_limit')) + '" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;width:140px">' +
     '<label style="display:flex;align-items:center;gap:8px;font-size:14px"><input id="cpNewOnly" type="checkbox" style="width:18px;height:18px"> ' + esc(t('coupon_new_customer_only')) + '</label></div>' +
     '<div style="margin-top:4px;font-size:12px;color:var(--muted)">' + esc(t('coupon_usage_limit_hint')) + '</div>' +
-    '<div style="margin-top:10px"><label style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input id="cpStackable" type="checkbox" checked style="width:18px;height:18px;margin-top:2px"> <span>' + esc(t('coupon_stackable')) + '<br><span style="font-size:12px;color:var(--muted)">' + esc(t('coupon_stackable_hint')) + '</span></span></label></div>' +
+    '<div style="margin-top:10px"><label style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input id="cpStackable" type="checkbox" style="width:18px;height:18px;margin-top:2px"> <span>' + esc(t('coupon_stackable')) + '<br><span style="font-size:12px;color:var(--muted)">' + esc(t('coupon_stackable_hint')) + '</span></span></label></div>' +
     '<div style="margin-top:14px;font-weight:700">' + esc(t('coupon_scope')) + '</div>' +
     '<div style="margin-top:8px;font-size:13px;color:var(--muted)">' + esc(t('scope_brands')) + '</div>' +
     '<div id="cpBrandChips" class="chips" style="margin-top:4px"></div>' +
@@ -3117,7 +3117,7 @@ async function renderManageCoupons(body) {
     $('#cpCode').value = ''; $('#cpCode').disabled = false;
     $('#cpType').value = 'percent'; $('#cpValue').value = '';
     $('#cpValidFrom').value = ''; $('#cpValidUntil').value = '';
-    $('#cpUsageLimit').value = ''; $('#cpNewOnly').checked = false; $('#cpStackable').checked = true;
+    $('#cpUsageLimit').value = ''; $('#cpNewOnly').checked = false; $('#cpStackable').checked = false;
     selBrands.clear(); selProducts.clear(); selProductQtys.clear(); selCustomers.clear();
     $$('[data-cpbrand]', brandWrap).forEach((ch) => ch.classList.remove('active'));
     paintPicked();
