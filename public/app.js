@@ -160,7 +160,7 @@ const I18N = {
     coupon_usage_limit: 'လူ limit (ယောက်)', coupon_usage_limit_hint: 'မဖြည့်ရင် ကန့်သတ်ချက် မရှိ', coupon_new_customer_only: 'Customer အသစ်တွေအတွက်ပဲ', coupon_limit_reached: 'ဒီ coupon limit ပြည့်သွားပါပြီ', coupon_not_new_customer: 'ဒီ coupon က customer အသစ်တွေအတွက်ပဲ သုံးလို့ရပါတယ်', coupon_phone_required: 'ဖုန်း နံပါတ် ထည့်ပြီးမှ ဒီ coupon သုံးလို့ရပါတယ်', coupon_limit_prefix: 'လူ', coupon_limit_suffix: 'ယောက်ပဲ သုံးလို့ရတယ်', coupon_new_only_tag: 'Customer အသစ်တွေအတွက်ပဲ', coupon_used_label: 'သုံးထားတာ', coupon_vouchers: 'စောင်', coupon_discount_given: 'လျှော့ပေးပြီးသား', coupon_edit: 'ပြင်မယ်', action_coupon_update: 'Coupon ပြင်တယ်',
     coupon_product_qty: 'Qty limit', coupon_product_qty_hint: 'ပစ္စည်း တစ်ခု ချင်းစီ ဘေးက box မှာ အရေအတွက် ထည့်လို့ရတယ် — မဖြည့်ရင် ကန့်သတ်ချက် မရှိ', coupon_qty_cap_suffix: 'ခုထိပဲ', coupon_qty_sold: 'ခု ရောင်းပြီးသား',
     coupon_stackable: 'Sale ပစ္စည်းနဲ့ ထပ်သုံးလို့ရတယ်', coupon_stackable_hint: 'ပိတ်ထားရင် sale ဈေး ရှိနေတဲ့ ပစ္စည်းတွေကို coupon လျှော့မပေးဘူး', coupon_not_stackable: 'Sale ပစ္စည်းတွေ မပါဘူး',
-    vip: 'VIP', vip_member: 'VIP Member', vip_card: 'VIP Card', vip_valid_until: 'သက်တမ်း', vip_expired: 'သက်တမ်း ကုန်သွားပါပြီ', vip_expiring_soon: 'သက်တမ်း ကုန်တော့မယ် — 200,000 ဖိုး ဝယ်ရင် သက်တမ်း တိုးမယ်', vip_discount: 'VIP လျှော့ဈေး', vip_birthday: 'မွေးနေ့', vip_birthday_month: 'မွေးနေ့လ အပို လျှော့ဈေး', vip_grant: 'VIP ပေးမယ်', vip_revoke: 'VIP ဖြုတ်မယ်', vip_extend: 'သက်တမ်း +၁ နှစ် တိုးမယ်', vip_settings: 'VIP Settings', vip_lifetime: 'စုစုပေါင်း ဝယ်ထားတာ', vip_grant_threshold: 'VIP ဖြစ်ဖို့ amount', vip_renewal_threshold: 'သက်တမ်း တိုးဖို့ amount', vip_validity_months: 'သက်တမ်း (လ)', vip_birthday_extra: 'မွေးနေ့ အပို %', vip_enabled: 'VIP အစီအစဉ် ဖွင့်ထားတယ်', vip_days_left: 'ရက် ကျန်တယ်', vip_granted: 'VIP ပေးလိုက်ပါပြီ', vip_extended: 'သက်တမ်း တိုးလိုက်ပါပြီ', vip_not_vip: 'VIP မဟုတ်ပါ', vip_tier_hint: 'Tier 1 က အမြဲ 0 Ks ကစတယ် — amount ကြီးလာတိုင်း % များလာရမယ်', action_vip_grant: 'VIP ပေးတယ်', action_vip_revoke: 'VIP ဖြုတ်တယ်', action_vip_extend: 'VIP သက်တမ်း တိုးတယ်', action_vip_settings_update: 'VIP settings ပြင်တယ်',
+    vip: 'VIP', vip_member: 'VIP Member', vip_card: 'VIP Card', vip_valid_until: 'သက်တမ်း', vip_expired: 'သက်တမ်း ကုန်သွားပါပြီ', vip_expiring_soon: 'သက်တမ်း ကုန်တော့မယ် — 200,000 ဖိုး ဝယ်ရင် သက်တမ်း တိုးမယ်', vip_discount: 'VIP လျှော့ဈေး', vip_birthday: 'မွေးနေ့', vip_birthday_month: 'မွေးနေ့လ အပို လျှော့ဈေး', vip_grant: 'VIP ပေးမယ်', vip_revoke: 'VIP ဖြုတ်မယ်', vip_extend: 'သက်တမ်း +၁ နှစ် တိုးမယ်', vip_settings: 'VIP Settings', vip_lifetime: 'စုစုပေါင်း ဝယ်ထားတာ', vip_grant_threshold: 'VIP ဖြစ်ဖို့ amount', vip_renewal_threshold: 'သက်တမ်း တိုးဖို့ amount', vip_validity_months: 'သက်တမ်း (လ)', vip_birthday_extra: 'မွေးနေ့ အပို %', vip_enabled: 'VIP အစီအစဉ် ဖွင့်ထားတယ်', vip_days_left: 'ရက် ကျန်တယ်', vip_granted: 'VIP ပေးလိုက်ပါပြီ', vip_extended: 'သက်တမ်း တိုးလိုက်ပါပြီ', vip_not_vip: 'VIP မဟုတ်ပါ', vip_code: 'VIP Code', vip_welcome_hi: 'မင်္ဂလာပါ', vip_welcome_save: 'VIP ဝယ်တိုင်း 5%–10% လျှော့ဈေး ရပါတယ်', filter_all: 'အားလုံး', filter_vip: 'VIP သီးသန့်', filter_expiring: 'သက်တမ်းနီးနေသူ', vip_tier_hint: 'Tier 1 က အမြဲ 0 Ks ကစတယ် — amount ကြီးလာတိုင်း % များလာရမယ်', action_vip_grant: 'VIP ပေးတယ်', action_vip_revoke: 'VIP ဖြုတ်တယ်', action_vip_extend: 'VIP သက်တမ်း တိုးတယ်', action_vip_settings_update: 'VIP settings ပြင်တယ်',
     sku: 'SKU / Barcode', scan: 'Scan', scan_title: 'Barcode စကင်ဖတ်မယ်', scan_hint: 'Barcode ကို ကင်မရာ ဘောင်ထဲ ထည့်ပြပါ', scan_failed: 'ဖတ်မရပါ — လက်နဲ့ ရိုက်ထည့်ပါ', duplicate_sku: 'ဒီ barcode ရှိပြီးသား ဖြစ်နေပါတယ်',
     coupon_no_eligible_items: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ ပစ္စည်း / brand တွေအတွက်ပဲ သုံးလို့ရပါတယ် — cart ထဲမှာ အဲဒါတွေ မရှိသေးပါ',
     search_products_ph: 'ပစ္စည်း ရှာပါ…', no_products_found: 'ပစ္စည်း မတွေ့ပါ',
@@ -340,7 +340,7 @@ const I18N = {
     coupon_usage_limit: 'People limit', coupon_usage_limit_hint: 'Leave blank for no limit', coupon_new_customer_only: 'New customers only', coupon_limit_reached: 'This coupon has reached its usage limit', coupon_not_new_customer: 'This coupon is only for new customers', coupon_phone_required: 'Enter your phone number to use this coupon', coupon_limit_prefix: 'First', coupon_limit_suffix: 'people only', coupon_new_only_tag: 'New customers only', coupon_used_label: 'Used', coupon_vouchers: 'vouchers', coupon_discount_given: 'Discount given', coupon_edit: 'Edit', action_coupon_update: 'Updated a coupon',
     coupon_product_qty: 'Qty limit', coupon_product_qty_hint: 'Set a qty per product in the box beside it — leave blank for no limit', coupon_qty_cap_suffix: 'units max', coupon_qty_sold: 'sold',
     coupon_stackable: 'Stacks with sale items', coupon_stackable_hint: 'When off, items already on sale get no coupon discount', coupon_not_stackable: 'Sale items excluded',
-    vip: 'VIP', vip_member: 'VIP Member', vip_card: 'VIP Card', vip_valid_until: 'Valid until', vip_expired: 'Membership expired', vip_expiring_soon: 'Expiring soon — spend 200,000 Ks to renew', vip_discount: 'VIP discount', vip_birthday: 'Birthday', vip_birthday_month: 'Birthday month extra', vip_grant: 'Make VIP', vip_revoke: 'Remove VIP', vip_extend: 'Extend 1 year', vip_settings: 'VIP Settings', vip_lifetime: 'Lifetime total', vip_grant_threshold: 'VIP grant amount', vip_renewal_threshold: 'Renewal amount', vip_validity_months: 'Validity (months)', vip_birthday_extra: 'Birthday extra %', vip_enabled: 'VIP program enabled', vip_days_left: 'days left', vip_granted: 'VIP granted', vip_extended: 'Validity extended', vip_not_vip: 'Not VIP', vip_tier_hint: 'Tier 1 always starts at 0 Ks — % should grow with the amount', action_vip_grant: 'Granted VIP', action_vip_revoke: 'Revoked VIP', action_vip_extend: 'Extended VIP', action_vip_settings_update: 'Updated VIP settings',
+    vip: 'VIP', vip_member: 'VIP Member', vip_card: 'VIP Card', vip_valid_until: 'Valid until', vip_expired: 'Membership expired', vip_expiring_soon: 'Expiring soon — spend 200,000 Ks to renew', vip_discount: 'VIP discount', vip_birthday: 'Birthday', vip_birthday_month: 'Birthday month extra', vip_grant: 'Make VIP', vip_revoke: 'Remove VIP', vip_extend: 'Extend 1 year', vip_settings: 'VIP Settings', vip_lifetime: 'Lifetime total', vip_grant_threshold: 'VIP grant amount', vip_renewal_threshold: 'Renewal amount', vip_validity_months: 'Validity (months)', vip_birthday_extra: 'Birthday extra %', vip_enabled: 'VIP program enabled', vip_days_left: 'days left', vip_granted: 'VIP granted', vip_extended: 'Validity extended', vip_not_vip: 'Not VIP', vip_code: 'VIP Code', vip_welcome_hi: 'Welcome back', vip_welcome_save: 'VIPs save 5%–10% on every order', filter_all: 'All', filter_vip: 'VIP only', filter_expiring: 'Expiring soon', vip_tier_hint: 'Tier 1 always starts at 0 Ks — % should grow with the amount', action_vip_grant: 'Granted VIP', action_vip_revoke: 'Revoked VIP', action_vip_extend: 'Extended VIP', action_vip_settings_update: 'Updated VIP settings',
     sku: 'SKU / Barcode', scan: 'Scan', scan_title: 'Scan barcode', scan_hint: 'Point the camera at the barcode', scan_failed: "Couldn't read it — type it in", duplicate_sku: 'This barcode is already used',
     coupon_no_eligible_items: 'This coupon only applies to selected products / brands — none are in your cart yet',
     search_products_ph: 'Search products…', no_products_found: 'No products found',
@@ -382,6 +382,7 @@ const state = {
   sectionFilter: '',
   coupon: JSON.parse(localStorage.getItem('bm_coupon') || 'null'),
   vipPreview: null,
+  vip: null, // own VIP status from /api/vip (fix-batch-58: header badge + Home strip)
   brands: [],
   brandFilter: '',
   types: [],
@@ -683,6 +684,7 @@ function showView(name) {
   if (name === 'manage') loadManage(state.manageTab);
   if (name === 'wishlist') loadWishlist();
   if (name === 'account') renderAccount();
+  if (name === 'home') paintVipStrip();
   window.scrollTo({ top: 0 });
 }
 
@@ -1591,6 +1593,7 @@ async function submitAuth() {
     }
     closeAuth();
     refreshAuthUI();
+    refreshVipStatus();
     registerPushToken();
     loadNotifications();
     startNotifPolling();
@@ -1740,6 +1743,7 @@ function renderForgotMailOff() {
 function logout() {
   state.token = null;
   state.user = null;
+  state.vip = null;
   localStorage.removeItem('bm_token');
   state.manageLoaded = {};
   stopNotifPolling();
@@ -1749,16 +1753,39 @@ function logout() {
   showView('home');
 }
 function refreshAuthUI() {
-  const btn = $('#authBtn');
-  if (state.user) {
-    btn.textContent = state.user.name;
-  } else {
-    btn.textContent = t('login');
-  }
+  paintVipBadge();
+  paintVipStrip();
   const isMgr = !!(state.user && (state.user.is_manager || state.user.is_sale_staff));
   $('#navManage').hidden = !isMgr;
   if (!isMgr && !$('#view-manage').hidden) showView('home');
   updateNotifBadge();
+}
+// VIP badge + Home welcome strip (fix-batch-58): the header name pill
+// carries a gold VIP badge on every page, and Home shows a gold welcome
+// strip with the member's discount. Both read state.vip, fetched once
+// after login and refreshed whenever the Account VIP card loads.
+function paintVipBadge() {
+  const btn = $('#authBtn');
+  if (!btn) return;
+  if (!state.user) { btn.textContent = t('login'); return; }
+  btn.innerHTML = esc(state.user.name || '') +
+    (state.vip && state.vip.is_vip ? ' <span class="vip-badge">💎 VIP</span>' : '');
+}
+function paintVipStrip() {
+  const strip = $('#vipStrip');
+  if (!strip) return;
+  if (state.user && state.vip && state.vip.is_vip) {
+    strip.hidden = false;
+    strip.innerHTML = '<span>💎</span><span style="flex:1">' + esc(t('vip_welcome_hi')) + ' <b>' + esc(state.user.name || '') + '</b> — ' + esc(t('vip_welcome_save')) + '</span><span>›</span>';
+  } else {
+    strip.hidden = true;
+  }
+}
+async function refreshVipStatus() {
+  if (!state.user) { state.vip = null; paintVipBadge(); paintVipStrip(); return; }
+  try { state.vip = await api('/vip'); } catch (e) { state.vip = null; }
+  paintVipBadge();
+  paintVipStrip();
 }
 async function restoreSession() {
   if (!state.token) return;
@@ -1771,6 +1798,7 @@ async function restoreSession() {
     localStorage.removeItem('bm_token');
   }
   refreshAuthUI();
+  refreshVipStatus();
 }
 
 /* ---------------- account ---------------- */
@@ -1822,6 +1850,8 @@ async function loadVipCard() {
   let v = null;
   try { v = await api('/vip'); } catch (e) { wrap.innerHTML = ''; return; }
   if (!v || (!v.is_vip && !v.vip_until)) { wrap.innerHTML = ''; return; }
+  // Keep the header badge + Home strip in sync with the card.
+  state.vip = v; paintVipBadge(); paintVipStrip();
   const until = v.vip_until ? v.vip_until.slice(0, 10) : '—';
   const daysLeft = v.vip_until ? Math.ceil((new Date(v.vip_until).getTime() - Date.now()) / 86400000) : null;
   const expired = !v.is_vip;
@@ -1834,7 +1864,14 @@ async function loadVipCard() {
     (expired ? '<div style="font-size:12px;margin-top:6px;font-weight:700">' + esc(t('vip_expired')) + '</div>' : '') +
     (soon ? '<div style="font-size:12px;margin-top:6px;font-weight:700">' + esc(t('vip_expiring_soon')) + '</div>' : '') +
     (v.birthday_month && v.is_vip ? '<div style="font-size:12px;margin-top:6px">🎂 ' + esc(t('vip_birthday_month')) + ' +' + (v.birthday_extra_pct || 0) + '%</div>' : '') +
+    (v.is_vip && v.vip_code ? '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><span>' + esc(t('vip_code')) + ': <b>' + esc(v.vip_code) + '</b></span><button type="button" id="vipCodeCopyBtn" style="padding:4px 10px;font-size:12px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.6);border-radius:999px;color:#fff;cursor:pointer">' + esc(t('copy')) + '</button></div>' : '') +
     '</div>';
+  const copyBtn = $('#vipCodeCopyBtn');
+  if (copyBtn && v.vip_code) copyBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v.vip_code).then(() => toast(t('copied'))).catch(() => toast(v.vip_code));
+    else toast(v.vip_code);
+  });
 }
 async function saveAccountEmail() {
   const msg = $('#acctEmailMsg');
@@ -2284,9 +2321,13 @@ async function renderManageUsers(body) {
     '<div class="mg-card"><div class="row-flex">' +
     '<input id="mgUserSearch" type="search" placeholder="' + esc(t('search_users')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
     '<button class="btn btn-primary" type="button" id="mgUserSearchBtn">' + esc(t('search_btn')) + '</button>' +
+    '</div><div class="chips" id="mgUserFilterChips" style="margin-top:10px">' +
+    '<button type="button" class="chip active" data-userfilter="all">' + esc(t('filter_all')) + '</button>' +
+    '<button type="button" class="chip" data-userfilter="vip">' + esc(t('filter_vip')) + '</button>' +
+    '<button type="button" class="chip" data-userfilter="expiring">' + esc(t('filter_expiring')) + '</button>' +
     '</div><div id="mgUserWrap" style="margin-top:12px"></div>' +
     '<div class="center" style="margin-top:12px"><button class="btn btn-outline" type="button" id="mgUserMoreBtn">' + esc(t('more')) + '</button></div></div>';
-  mgUsers = { q: '', offset: 0, items: [] };
+  mgUsers = { q: '', filter: 'all', offset: 0, items: [] };
   const doSearch = () => {
     mgUsers.q = $('#mgUserSearch').value.trim();
     mgUsers.offset = 0; mgUsers.items = [];
@@ -2294,6 +2335,13 @@ async function renderManageUsers(body) {
   };
   $('#mgUserSearchBtn').addEventListener('click', doSearch);
   $('#mgUserSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  // VIP filter (fix-batch-58): VIP-only and expiring-soon (≤30 days) views
+  // for renewal marketing calls — VIP lists sort by nearest expiry first.
+  $$('#mgUserFilterChips [data-userfilter]').forEach((b) => b.addEventListener('click', () => {
+    mgUsers.filter = b.dataset.userfilter;
+    $$('#mgUserFilterChips [data-userfilter]').forEach((x) => x.classList.toggle('active', x === b));
+    loadMgUsers(true);
+  }));
   $('#mgUserMoreBtn').addEventListener('click', () => loadMgUsers(false));
   if (isOwner) {
     loadMgManagers();
@@ -2377,6 +2425,7 @@ async function loadMgUsers(reset) {
   if (reset) { mgUsers.offset = 0; mgUsers.items = []; wrap.innerHTML = '<div class="loading">' + esc(t('loading')) + '</div>'; }
   const params = new URLSearchParams({ limit: String(PAGE), offset: String(mgUsers.offset) });
   if (mgUsers.q) params.set('q', mgUsers.q);
+  if (mgUsers.filter && mgUsers.filter !== 'all') params.set('vip', mgUsers.filter);
   const isOwner = state.user && state.user.phone === '095117366';
   try {
     const data = await api('/manage/users?' + params.toString());
@@ -2387,14 +2436,14 @@ async function loadMgUsers(reset) {
     if (moreBtn) moreBtn.style.display = (data.total != null && mgUsers.offset < data.total) ? '' : 'none';
     if (!mgUsers.items.length) { wrap.innerHTML = '<div class="empty">' + esc(t('no_users')) + '</div>'; return; }
     wrap.innerHTML = mgUsers.items.map((u) =>
-      '<div class="mg-card" style="margin-bottom:10px"><div class="kv-row"><span><strong>' + esc(u.name || '') + '</strong> — ' + esc(u.phone) + '</span><span>' + esc(t('orders')) + ': ' + (u.orders_count || 0) + '</span></div>' +
+      '<div class="mg-card" style="margin-bottom:10px"><div class="kv-row"><span><strong>' + esc(u.name || '') + '</strong> — <a href="tel:' + esc(u.phone) + '" style="color:inherit">' + esc(u.phone) + '</a></span><span>' + esc(t('orders')) + ': ' + (u.orders_count || 0) + '</span></div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">' +
       (u.is_owner ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('owner')) + '</span>' : '') +
       (u.is_manager && !u.is_owner ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('manager')) + '</span>' : '') +
       (u.is_sale_staff && !u.is_owner && !u.is_manager ? '<span class="badge" style="background:#FDE7F0;color:var(--pink)">' + esc(t('sale_staff')) + '</span>' : '') +
       '</div>' +
       '<div style="font-size:12px;color:var(--muted);margin-top:4px">' + esc(t('vip_lifetime')) + ': ' + fmt(u.lifetime_total || 0) +
-      (u.is_vip ? ' · 💎 ' + esc(t('vip_member')) + (u.vip_until ? ' — ' + esc(t('vip_valid_until')) + ' ' + esc(u.vip_until.slice(0, 10)) : '') : '') + '</div>' +
+      (u.is_vip ? ' · 💎 ' + esc(t('vip_member')) + (u.vip_code ? ' · ' + esc(t('vip_code')) + ' ' + esc(u.vip_code) : '') + (u.vip_until ? ' — ' + esc(t('vip_valid_until')) + ' ' + esc(u.vip_until.slice(0, 10)) + ' · ' + Math.max(0, Math.ceil((Date.parse(u.vip_until) - Date.now()) / 86400000)) + ' ' + esc(t('vip_days_left')) : '') : '') + '</div>' +
       '<div class="row-flex" style="margin-top:8px;flex-wrap:wrap">' +
       '<button type="button" class="btn btn-outline" data-vipgrant="' + esc(u.phone) + '" data-isvip="' + (u.is_vip ? '1' : '0') + '">' + esc(u.is_vip ? t('vip_revoke') : t('vip_grant')) + '</button>' +
       (u.is_vip ? '<button type="button" class="btn btn-outline" data-vipextend="' + esc(u.phone) + '">' + esc(t('vip_extend')) + '</button>' : '') +
@@ -3779,6 +3828,9 @@ function wire() {
     if (state.user) showView('account');
     else openAuth();
   });
+  // VIP welcome strip (fix-batch-58): tapping it opens My Account, where
+  // the VIP card (with the member code) lives.
+  $('#vipStrip').addEventListener('click', () => showView('account'));
   $('#notifBell').addEventListener('click', openNotifications);
   $('#notifClose').addEventListener('click', () => closeOverlay('#notifOverlay', '#notifModal'));
   // Foreground push banner (fix-batch-31): tap → that order (or the
