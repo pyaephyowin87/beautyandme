@@ -179,6 +179,14 @@ const I18N = {
     devices_reason_no_tokens: 'Staff device မရှိသေးပါ',
     devices_reason_send_failed: 'Push ပို့မရပါ',
     devices_staff: 'Staff', devices_last_seen: 'နောက်ဆုံး တွေ့တာ',
+    mail_title: 'Email စနစ်', mail_status: 'Email အခြေအနေ', mail_from: 'ပို့တဲ့ mail',
+    mail_last_send: 'နောက်ဆုံး ပို့တာ', mail_never_sent: 'ဆာဗာ စတင်ပြီးကတည်းက မပို့ရသေးပါ',
+    mail_configured: 'ချိတ်ထားပြီးပါပြီ', mail_not_configured: 'မချိတ်ရသေးပါ',
+    mail_test: 'Test mail ပို့မယ်', mail_testing: 'ပို့နေပါတယ်…',
+    mail_test_ok: 'Test mail ပို့ပြီးပါပြီ — ဆိုင် Gmail inbox စစ်ပါ', mail_test_fail: 'Test mail ပို့မရပါ',
+    mail_reason_timeout: 'Mail ဆာဗာ တုံ့ပြန်တာ ကြာနေပါတယ် (20 စက္ကန့်ကျော်) — connection တန်းလန်းဖြစ်နေတယ်',
+    mail_reason_send_failed: 'Mail ပို့မရပါ — Gmail က လက်မခံပါ',
+    mail_reason_not_configured: 'Email မချိတ်ရသေးပါ',
     push_banner_close: 'ပိတ်မယ်',
   },
   en: {
@@ -351,6 +359,14 @@ const I18N = {
     devices_reason_no_tokens: 'No staff devices registered',
     devices_reason_send_failed: 'Push send failed',
     devices_staff: 'Staff', devices_last_seen: 'Last seen',
+    mail_title: 'Email system', mail_status: 'Email status', mail_from: 'Sending from',
+    mail_last_send: 'Last send', mail_never_sent: 'Nothing sent since the server started',
+    mail_configured: 'Connected', mail_not_configured: 'Not connected',
+    mail_test: 'Send test mail', mail_testing: 'Sending…',
+    mail_test_ok: 'Test mail sent — check the shop Gmail inbox', mail_test_fail: 'Test mail failed',
+    mail_reason_timeout: 'Mail server is taking too long (over 20s) — the connection is hanging',
+    mail_reason_send_failed: 'Mail not accepted by Gmail',
+    mail_reason_not_configured: 'Email is not connected',
     push_banner_close: 'Dismiss',
   },
 };
@@ -4061,6 +4077,17 @@ async function openNotificationOrder(btn) {
 /* ---------------- manage: devices (fix-batch-30) ----------------
    Registered push devices + the test-push diagnostic. Tokens are
    masked by the server — the full token never reaches this screen. */
+// Email diagnostics (fix-batch-54): one line describing the last send
+// attempt, or that no mail has been sent since the server started.
+function mailLastSendText(last) {
+  if (!last) return t('mail_never_sent');
+  const when = last.at ? fmtDate(last.at) : '';
+  if (last.sent) return (when ? when + ' — ' : '') + '✓ ' + (last.to || '');
+  const rk = last.reason === 'timeout' ? 'mail_reason_timeout'
+    : last.reason === 'not_configured' ? 'mail_reason_not_configured'
+    : 'mail_reason_send_failed';
+  return (when ? when + ' — ' : '') + '✗ ' + t(rk) + (last.detail ? ' (' + last.detail + ')' : '');
+}
 async function renderManageDevices(body) {
   body.innerHTML = '<div class="mg-card"><h3>' + esc(t('devices_title')) + '</h3><div id="mgDevicesWrap"><div class="loading">' + esc(t('loading')) + '</div></div></div>';
   try {
@@ -4084,7 +4111,10 @@ async function renderManageDevices(body) {
             '<td data-label="Token"><span class="masked">' + esc(d.token_masked || '') + '</span></td>' +
             '<td data-label="">' + (d.is_staff ? '<span class="status-pill">' + esc(t('devices_staff')) + '</span>' : '') + '</td></tr>').join('') +
           '</tbody></table></div>'
-        : '<div class="empty">' + esc(t('devices_none')) + '</div>');
+        : '<div class="empty">' + esc(t('devices_none')) + '</div>') +
+      '<hr style="margin:18px 0">' +
+      '<h3 style="margin:0 0 8px">' + esc(t('mail_title')) + '</h3>' +
+      '<div id="mgMailWrap"><div class="loading">' + esc(t('loading')) + '</div></div>';
     $('#mgTestPushBtn').addEventListener('click', async () => {
       const btn = $('#mgTestPushBtn');
       const out = $('#mgTestPushResult');
@@ -4108,6 +4138,40 @@ async function renderManageDevices(body) {
       btn.disabled = false;
       btn.textContent = t('devices_test');
     });
+    // Email diagnostics (fix-batch-54): show Gmail status + last send,
+    // with a one-tap test mail to the shop's own inbox.
+    const mailWrap = $('#mgMailWrap');
+    async function refreshMailStatus() {
+      try {
+        const m = await api('/manage/mail-status');
+        const st = m.status === 'configured' ? 'mail_configured' : 'mail_not_configured';
+        mailWrap.innerHTML =
+          '<div class="line"><span>' + esc(t('mail_status')) + '</span><strong>' + esc(t(st)) + '</strong></div>' +
+          '<div class="line"><span>' + esc(t('mail_from')) + '</span><strong>' + esc(m.from || '—') + '</strong></div>' +
+          '<div class="line"><span>' + esc(t('mail_last_send')) + '</span><span>' + esc(mailLastSendText(m.last)) + '</span></div>' +
+          '<div style="margin:12px 0"><button class="btn btn-primary" type="button" id="mgTestMailBtn">' + esc(t('mail_test')) + '</button></div>' +
+          '<div id="mgTestMailResult" class="meta-line"></div>';
+        $('#mgTestMailBtn').addEventListener('click', async () => {
+          const b = $('#mgTestMailBtn'); const o = $('#mgTestMailResult');
+          b.disabled = true; b.textContent = t('mail_testing');
+          try {
+            const r = await api('/manage/mail-test', { method: 'POST' });
+            if (r.sent) { o.textContent = t('mail_test_ok'); toast(t('mail_test_ok')); }
+            else {
+              const rk = r.reason === 'timeout' ? 'mail_reason_timeout'
+                : r.reason === 'not_configured' ? 'mail_reason_not_configured'
+                : 'mail_reason_send_failed';
+              o.textContent = t('mail_test_fail') + ' — ' + t(rk);
+            }
+          } catch (e) { o.textContent = t('mail_test_fail') + ' — ' + t('error_load'); }
+          b.disabled = false; b.textContent = t('mail_test');
+          refreshMailStatus();
+        });
+      } catch (e) {
+        if (mailWrap) mailWrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+      }
+    }
+    refreshMailStatus();
   } catch (e) {
     const wrap = $('#mgDevicesWrap');
     if (wrap) wrap.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
