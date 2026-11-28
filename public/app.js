@@ -49,6 +49,7 @@ const I18N = {
     search_ph: 'ရှာဖွေမည်…', search_btn: 'ရှာမယ်',
     cart: 'ခြင်းတောင်း', login: 'အကောင့် ဝင်မယ်', logout: 'ထွက်မယ်', account: 'အကောင့်',
     hero_tag: 'အလှအပ ပစ္စည်းများ — စိတ်ချယုံကြည်ရသော K-Beauty ဆိုင်',
+    hero_banner: 'Hero banner ပုံ', hero_banner_hint: 'Home အပေါ်ဆုံး box မှာ ပြမယ့် ပုံ — promotion ပုံ တင်လို့ရတယ်။ ပုံ မရှိရင် စာပဲ ပြမယ်။', hero_upload: 'ပုံ တင်မယ်', hero_change: 'ပုံ ပြောင်းမယ်', hero_remove: 'ပုံ ဖြုတ်မယ်', hero_no_image: 'ပုံ မရှိသေးပါ', hero_saved: 'သိမ်းပြီးပါပြီ',
     best: 'အရောင်းရဆုံး', sale: 'လျှော့ဈေး', new: 'ပစ္စည်းအသစ်', all: 'ပစ္စည်းအားလုံး',
     view_all: 'အားလုံးကြည့်မယ်', more: 'နောက်ထပ် ပြမယ်',
     in_stock: 'Stock ရှိပါတယ်', out_stock: 'ကုန်ပြီ',
@@ -143,7 +144,7 @@ const I18N = {
     owner_only: 'Owner (095117366) ပဲ လုပ်နိုင်ပါတယ်', no_users: 'User မရှိသေးပါ',
     pw_reset_hint: 'ချိန်းပြီးရင် customer ကို Messenger / ဖုန်း နဲ့ password အသစ်ကို ပြောပေးပါ — customer က အသစ်နဲ့ ပြန်ဝင်ရမယ်',
     activity: 'လုပ်ဆောင်ချက် မှတ်တမ်း', search_activity: 'ရှာမယ် (voucher နံပါတ် / လူ / ပစ္စည်း)…', all_actions: 'လုပ်ဆောင်ချက် အားလုံး', no_activity: 'မှတ်တမ်း မရှိသေးပါ',
-    action_order_status: 'Order status ပြောင်းတယ်', action_password_reset: 'Password ချိန်းပေးတယ်', action_manager_add: 'Manager ထည့်တယ်', action_manager_remove: 'Manager ဖြုတ်တယ်', action_product_update: 'ပစ္စည်း ပြင်တယ်', action_product_photo_add: 'ပစ္စည်း ပုံ ထည့်တယ်', action_product_photo_remove: 'ပစ္စည်း ပုံ ဖျက်တယ်', action_coupon_create: 'Coupon လုပ်တယ်', action_coupon_delete: 'Coupon ဖျက်တယ်', action_payments_update: 'Payment အကောင့် ပြင်တယ်', action_app_links_update: 'App link ပြင်တယ်', action_woocommerce_settings: 'WooCommerce setting ပြင်တယ်', action_woocommerce_import: 'WooCommerce ပုံ တင်တယ်', action_order_edit: 'Order ပစ္စည်း ပြင်တယ်',
+    action_order_status: 'Order status ပြောင်းတယ်', action_password_reset: 'Password ချိန်းပေးတယ်', action_manager_add: 'Manager ထည့်တယ်', action_manager_remove: 'Manager ဖြုတ်တယ်', action_product_update: 'ပစ္စည်း ပြင်တယ်', action_product_photo_add: 'ပစ္စည်း ပုံ ထည့်တယ်', action_product_photo_remove: 'ပစ္စည်း ပုံ ဖျက်တယ်', action_coupon_create: 'Coupon လုပ်တယ်', action_coupon_delete: 'Coupon ဖျက်တယ်', action_payments_update: 'Payment အကောင့် ပြင်တယ်', action_app_links_update: 'App link ပြင်တယ်', action_woocommerce_settings: 'WooCommerce setting ပြင်တယ်', action_woocommerce_import: 'WooCommerce ပုံ တင်တယ်', action_order_edit: 'Order ပစ္စည်း ပြင်တယ်', action_hero_banner_update: 'Hero banner ပုံ ပြောင်းတယ်',
     edit_items: 'ပစ္စည်း ပြင်မယ်', save_changes: 'သိမ်းမယ်', cancel: 'မလုပ်တော့ဘူး', no_items: 'ပစ္စည်း မရှိသေးပါ', order_locked: 'ပို့ပြီးသား / ပယ်ဖျက်ထားတဲ့ order ကို ပြင်လို့မရပါ', total_changed: 'Total ပြောင်းသွားတယ်', total_diff_hint: 'customer လွှဲထားတဲ့ ငွေ ကွာရင် Messenger နဲ့ ပြောပေးပါ',
     coupon: 'Coupon', apply: 'သုံးမယ်', remove_coupon: 'Coupon ဖြုတ်မယ်', coupon_invalid: 'Coupon မမှန်ပါ', action_order_coupon: 'Order coupon ပြင်တယ်',
     manager_hint: 'ဝန်ထမ်းက ဆိုင်မှာ အရင် register လုပ်ထားရမယ် (နာမည် + ဖုန်း) — ပြီးမှ ဒီမှာ ဖုန်းနံပါတ် ရိုက်ပြီး Add လုပ်ပါ',
@@ -213,6 +214,7 @@ const I18N = {
     search_ph: 'Search…', search_btn: 'Search',
     cart: 'Cart', login: 'Log in', logout: 'Log out', account: 'Account',
     hero_tag: 'Trusted K-Beauty shop — beauty products you can rely on',
+    hero_banner: 'Hero banner image', hero_banner_hint: 'Image shown in the top box on Home — use it for promotions. Without an image, the text shows instead.', hero_upload: 'Upload image', hero_change: 'Change image', hero_remove: 'Remove image', hero_no_image: 'No image yet', hero_saved: 'Saved',
     best: 'Best Sellers', sale: 'Sale', new: 'New Arrivals', all: 'All Products',
     view_all: 'View all', more: 'Show more',
     in_stock: 'In Stock', out_stock: 'Sold Out',
@@ -307,7 +309,7 @@ const I18N = {
     owner_only: 'Only the owner (095117366) can do this', no_users: 'No users yet',
     pw_reset_hint: 'After changing, tell the customer the new password by Messenger / phone — they will sign in again with it',
     activity: 'Activity log', search_activity: 'Search (voucher no. / person / product)…', all_actions: 'All actions', no_activity: 'No activity yet',
-    action_order_status: 'Changed order status', action_password_reset: 'Reset a password', action_manager_add: 'Added a manager', action_manager_remove: 'Removed a manager', action_product_update: 'Edited a product', action_product_photo_add: 'Added a product photo', action_product_photo_remove: 'Removed a product photo', action_coupon_create: 'Created a coupon', action_coupon_delete: 'Deleted a coupon', action_payments_update: 'Edited payment accounts', action_app_links_update: 'Edited app links', action_woocommerce_settings: 'Edited WooCommerce settings', action_woocommerce_import: 'Imported WooCommerce photos', action_order_edit: 'Edited order items',
+    action_order_status: 'Changed order status', action_password_reset: 'Reset a password', action_manager_add: 'Added a manager', action_manager_remove: 'Removed a manager', action_product_update: 'Edited a product', action_product_photo_add: 'Added a product photo', action_product_photo_remove: 'Removed a product photo', action_coupon_create: 'Created a coupon', action_coupon_delete: 'Deleted a coupon', action_payments_update: 'Edited payment accounts', action_app_links_update: 'Edited app links', action_woocommerce_settings: 'Edited WooCommerce settings', action_woocommerce_import: 'Imported WooCommerce photos', action_order_edit: 'Edited order items', action_hero_banner_update: 'Changed the hero banner',
     edit_items: 'Edit items', save_changes: 'Save changes', cancel: 'Cancel', no_items: 'No items yet', order_locked: 'A delivered or cancelled order cannot be edited', total_changed: 'Total changed', total_diff_hint: 'If the customer already transferred, tell them the difference by Messenger',
     coupon: 'Coupon', apply: 'Apply', remove_coupon: 'Remove coupon', coupon_invalid: 'Invalid coupon', action_order_coupon: 'Edited order coupon',
     manager_hint: 'Staff must register in the shop first (name + phone) — then type their phone here and tap Add',
@@ -870,9 +872,46 @@ function clearHomeFilters() {
   loadHomeGrid(true);
 }
 async function loadHome() {
+  loadHero();
   loadSection('best', '#rowBest', null);
   loadSection('sale', '#rowSale', '#saleSectionHead');
   loadHomeGrid(true);
+}
+
+// Home hero banner (fix-batch-44): one promo image in the top box, set from
+// Manage → Banner. Without an image the text hero shows. Tapping the image
+// scrolls to the Sale section (or Best Sellers when there is no sale).
+let heroWired = false;
+async function loadHero() {
+  const box = $('#heroBox');
+  const img = $('#heroImg');
+  const text = $('#heroText');
+  if (!box || !img || !text) return;
+  if (!heroWired) {
+    heroWired = true;
+    box.addEventListener('click', () => {
+      if (img.hidden) return;
+      const target = !$('#saleSectionHead').hidden ? $('#saleSectionHead') : $('#homeSections');
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+  try {
+    const data = await api('/hero');
+    if (data && data.image_url) {
+      img.src = data.image_url;
+      img.hidden = false;
+      text.hidden = true;
+      box.classList.add('has-img');
+    } else {
+      img.hidden = true;
+      text.hidden = false;
+      box.classList.remove('has-img');
+    }
+  } catch (e) {
+    img.hidden = true;
+    text.hidden = false;
+    box.classList.remove('has-img');
+  }
 }
 
 /* ---------------- product detail ---------------- */
@@ -1728,6 +1767,7 @@ function loadManage(tab) {
   else if (tab === 'users') renderManageUsers(body);
   else if (tab === 'catalog') renderManageCatalog(body);
   else if (tab === 'coupons') renderManageCoupons(body);
+  else if (tab === 'banner') renderManageBanner(body);
   else if (tab === 'payments') renderManagePayments(body);
   else if (tab === 'applink') renderManageAppLinks(body);
   else if (tab === 'woocommerce') renderManageWoo(body);
@@ -2456,16 +2496,17 @@ async function renderManageCatalog(body) {
   loadMgCatalog(true);
   renderRenamePanel();
 }
-// Downscale a picked photo to max 800px JPEG before upload — keeps the
+// Downscale a picked photo to max `max`px JPEG before upload — keeps the
 // upload small and the stored image a sensible size for product cards.
-function downscaleImage(file) {
+// The hero banner uses a bigger max (1200) so it stays sharp full-width.
+function downscaleImage(file, max) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const max = 800;
-        const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        const limit = max || 800;
+        const scale = Math.min(1, limit / Math.max(img.naturalWidth, img.naturalHeight));
         const w = Math.max(1, Math.round(img.naturalWidth * scale));
         const h = Math.max(1, Math.round(img.naturalHeight * scale));
         const c = document.createElement('canvas');
@@ -2901,6 +2942,63 @@ async function renderManageCoupons(body) {
   paintPicked();
   load();
 }
+/* ---------------- manage: hero banner (fix-batch-44) ---------------- */
+async function renderManageBanner(body) {
+  body.innerHTML =
+    '<div class="mg-card">' +
+    '<h3 style="margin:0 0 6px">' + esc(t('hero_banner')) + '</h3>' +
+    '<div class="hint" style="margin-bottom:10px">' + esc(t('hero_banner_hint')) + '</div>' +
+    '<div id="mgHeroPreview" style="margin-bottom:10px"></div>' +
+    '<div class="row-flex">' +
+    '<label class="btn" style="cursor:pointer">' + esc(t('hero_upload')) +
+    '<input id="mgHeroInput" type="file" accept="image/*" hidden></label>' +
+    '<button id="mgHeroRemove" class="btn ghost" type="button">' + esc(t('hero_remove')) + '</button>' +
+    '</div>' +
+    '<div id="mgHeroMsg" class="hint" style="margin-top:8px"></div>' +
+    '</div>';
+  const preview = $('#mgHeroPreview');
+  const msg = $('#mgHeroMsg');
+  async function refresh() {
+    try {
+      const data = await api('/hero');
+      preview.innerHTML = (data && data.image_url)
+        ? '<img src="' + esc(data.image_url) + '" alt="banner" style="display:block;width:100%;height:auto;border-radius:12px">'
+        : '<div class="empty">' + esc(t('hero_no_image')) + '</div>';
+    } catch (e) {
+      preview.innerHTML = '<div class="error-box">' + esc(t('error_load')) + '</div>';
+    }
+  }
+  await refresh();
+  $('#mgHeroInput').addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    if (!file.type || file.type.indexOf('image/') !== 0) { msg.textContent = t('error_load'); return; }
+    msg.textContent = t('loading');
+    try {
+      const dataUrl = await downscaleImage(file, 1200);
+      await api('/manage/hero', { method: 'PUT', body: JSON.stringify({ image_url: dataUrl }) });
+      msg.textContent = t('hero_saved');
+      await refresh();
+      loadHero();
+    } catch (e) {
+      msg.textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : '');
+    }
+    ev.target.value = '';
+  });
+  $('#mgHeroRemove').addEventListener('click', async () => {
+    if (!window.confirm(t('hero_remove') + '?')) return;
+    msg.textContent = t('loading');
+    try {
+      await api('/manage/hero', { method: 'PUT', body: JSON.stringify({ image_url: null }) });
+      msg.textContent = t('hero_saved');
+      await refresh();
+      loadHero();
+    } catch (e) {
+      msg.textContent = t('error_load') + (e && e.message ? ' (' + e.message + ')' : '');
+    }
+  });
+}
+
 async function renderManagePayments(body) {
   body.innerHTML = '<div class="mg-card"><h3>' + esc(t('payment')) + '</h3><div id="mgPayList"></div>' +
     '<button class="btn btn-primary btn-block" type="button" id="mgPaySave" style="margin-top:12px">' + esc(t('save')) + '</button></div>';
