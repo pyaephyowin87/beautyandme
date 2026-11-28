@@ -1696,6 +1696,7 @@ app.post('/api/manage/devices/test-push', authMiddleware, managerMiddleware, asy
 app.get('/api/manage/mail-status', authMiddleware, managerMiddleware, (_req, res) => {
   return res.json({
     status: mailer.mailerStatus(),
+    mode: mailer.mailMode(),
     from: mailer.mailFromEmail(),
     last: mailer.lastSendResult(),
   });
