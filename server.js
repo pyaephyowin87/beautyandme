@@ -805,14 +805,57 @@ function couponCustomerEligible(coupon, phone) {
 }
 // Discount is computed on the ELIGIBLE items only, never on the whole order.
 // items: [{unit_price, qty, product}]
-function couponDiscountFor(coupon, items) {
-  const base = (items || []).filter((it) => couponItemEligible(coupon, it.product))
-    .reduce((a, it) => a + it.unit_price * it.qty, 0);
+function couponDiscountFor(coupon, items, usageMap) {
+  let base = 0;
+  for (const it of items || []) {
+    if (!couponItemEligible(coupon, it.product)) continue;
+    let qty = it.qty;
+    // Per-product qty cap (fix-batch-49): only the units still left under
+    // the cap are discounted; the rest of the line pays full price.
+    const remaining = couponProductRemaining(coupon, it.product.id, usageMap);
+    if (remaining != null) qty = Math.min(qty, remaining);
+    base += it.unit_price * Math.max(0, qty);
+  }
   if (base <= 0) return { discount: 0, base: 0 };
   let d = 0;
   if (coupon.type === 'percent') d = Math.round((base * Number(coupon.value)) / 100);
   else d = Math.min(Number(coupon.value) || 0, base);
   return { discount: d, base };
+}
+// Per-product qty caps (fix-batch-49): how many units of each product have
+// already been sold WITH this coupon (non-cancelled orders only). Cancelled
+// orders free their units — the cap is a promo stock, not a lifetime count.
+// excludeOrderId lets admin-apply / order-edit re-check an order without
+// counting the order's own units against its own cap.
+async function couponProductUsage(code, excludeOrderId) {
+  const orders = await store.listOrders();
+  const used = {};
+  for (const o of orders || []) {
+    if (!o || o.coupon_code !== code || o.status === 'cancelled' || o.id === excludeOrderId) continue;
+    for (const it of o.items || []) {
+      if (!it || !it.product_id) continue;
+      used[it.product_id] = (used[it.product_id] || 0) + (Number(it.qty) || 0);
+    }
+  }
+  return used;
+}
+// Remaining discounted units for one product under this coupon (null = no cap).
+function couponProductRemaining(coupon, productId, usageMap) {
+  const cap = coupon && coupon.product_qtys ? coupon.product_qtys[productId] : null;
+  if (cap == null) return null;
+  return Math.max(0, cap - ((usageMap && usageMap[productId]) || 0));
+}
+// True when at least one scoped product still has discounted units left
+// (or has no cap). A product-scoped coupon with every cap exhausted is dead.
+function couponHasRemaining(coupon, usageMap) {
+  if (!coupon || !Array.isArray(coupon.products) || !coupon.products.length) return true;
+  const qtys = coupon.product_qtys || {};
+  if (!Object.keys(qtys).length) return true;
+  for (const id of coupon.products) {
+    if (qtys[id] == null) return true;
+    if (couponProductRemaining(coupon, id, usageMap) > 0) return true;
+  }
+  return false;
 }
 // Coupon validity window (fix-batch-47): a coupon is usable only while it
 // is active AND the current time is inside [valid_from, valid_until]
@@ -867,6 +910,10 @@ async function couponIsUsableAsync(coupon, nowMs, excludeOrderId) {
   if (coupon && coupon.usage_limit != null) {
     const { count } = await couponUsageStats(coupon.code, excludeOrderId);
     if (count >= coupon.usage_limit) return false;
+  }
+  if (coupon && coupon.product_qtys && Object.keys(coupon.product_qtys).length) {
+    const usageMap = await couponProductUsage(coupon.code, excludeOrderId);
+    if (!couponHasRemaining(coupon, usageMap)) return false;
   }
   return true;
 }
@@ -1021,6 +1068,7 @@ app.get('/api/coupons', async (req, res, next) => {
         valid_until: c.valid_until || null,
         usage_limit: c.usage_limit != null ? c.usage_limit : null,
         new_customer_only: !!c.new_customer_only,
+        product_qtys: c.product_qtys || null,
         brands: Array.isArray(c.brands) ? c.brands : [],
         products: Array.isArray(c.products) ? c.products : [],
         customers_only: Array.isArray(c.customers) && c.customers.length > 0,
@@ -1037,6 +1085,9 @@ app.post('/api/coupons/validate', async (req, res, next) => {
     const coupon = await store.getCoupon(code);
     const reason = await couponRefusalReason(coupon, phone);
     if (reason) return res.json({ valid: false, reason });
+    // Per-product qty caps (fix-batch-49): the discount only covers the
+    // units still left under each product's cap.
+    const usageMap = await couponProductUsage(coupon.code);
     const scoped = (Array.isArray(coupon.brands) && coupon.brands.length > 0)
       || (Array.isArray(coupon.products) && coupon.products.length > 0);
     // Resolve the cart against server-side products/prices. Never trust
@@ -1053,11 +1104,11 @@ app.post('/api/coupons/validate', async (req, res, next) => {
     }
     if (scoped) {
       if (!resolved.length) return res.json({ valid: false, reason: 'no_eligible_items' });
-      const { discount, base } = couponDiscountFor(coupon, resolved);
+      const { discount, base } = couponDiscountFor(coupon, resolved, usageMap);
       if (base <= 0) return res.json({ valid: false, reason: 'no_eligible_items' });
       return res.json({ valid: true, code: coupon.code, type: coupon.type || 'percent', value: coupon.value, discount, eligible_total: base, brands: coupon.brands || [], products: coupon.products || [] });
     }
-    const { discount, base } = couponDiscountFor(coupon, resolved);
+    const { discount, base } = couponDiscountFor(coupon, resolved, usageMap);
     return res.json({ valid: true, code: coupon.code, type: coupon.type || 'percent', value: coupon.value, discount, eligible_total: base, brands: [], products: [] });
   } catch (err) { return next(err); }
 });
@@ -1210,8 +1261,12 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     if (coupon_code) {
       coupon = await store.getCoupon(coupon_code);
       if (await couponRefusalReason(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
+      const usageMap = await couponProductUsage(coupon.code);
       const calcItems = orderItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
-      discount = couponDiscountFor(coupon, calcItems).discount;
+      discount = couponDiscountFor(coupon, calcItems, usageMap).discount;
+      // A coupon that yields no discount (e.g. every capped unit sold) must
+      // not be recorded on the order — it would eat a usage-limit slot.
+      if (discount <= 0) return res.status(400).json({ error: 'invalid_coupon' });
       discount = Math.min(discount, subtotal);
     }
 
@@ -1624,8 +1679,9 @@ app.patch('/api/manage/orders/:id/items', authMiddleware, orderStaffMiddleware, 
       const coupon = await store.getCoupon(order.coupon_code);
       const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
       if (coupon && coupon.active !== false && couponCustomerEligible(coupon, custPhone)) {
+        const usageMap = await couponProductUsage(coupon.code, order.id);
         const calcItems = newItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
-        discount = couponDiscountFor(coupon, calcItems).discount;
+        discount = couponDiscountFor(coupon, calcItems, usageMap).discount;
       }
     }
     const oldTotal = order.total;
@@ -1698,8 +1754,9 @@ app.patch('/api/manage/orders/:id/coupon', authMiddleware, orderStaffMiddleware,
     if (reason) return res.status(400).json({ error: ADMIN_COUPON_ERRORS[reason] || 'invalid_coupon' });
     const products = await store.listProducts();
     const byId = new Map(products.map((p) => [p.id, p]));
+    const usageMap = await couponProductUsage(coupon.code, order.id);
     const calcItems = (order.items || []).map((oi) => ({ unit_price: oi.unit_price, qty: oi.qty, product: byId.get(oi.product_id) }));
-    const discount = couponDiscountFor(coupon, calcItems).discount;
+    const discount = couponDiscountFor(coupon, calcItems, usageMap).discount;
     if (discount <= 0) return res.status(400).json({ error: 'no_eligible_items' });
     order.coupon_code = coupon.code;
     order.discount = discount;
@@ -2321,21 +2378,29 @@ app.get('/api/manage/coupons', authMiddleware, managerMiddleware, async (_req, r
   try {
     const list = await store.listCoupons();
     await withCouponProductNames(list);
-    // Attach usage stats (fix-batch-48): non-cancelled orders per coupon.
+    // Attach usage stats (fix-batch-48/49): non-cancelled orders per coupon,
+    // and per-product units sold with the coupon (for the qty caps).
     const orders = await store.listOrders();
     const byCode = new Map();
+    const byCodeProducts = new Map();
     for (const o of orders || []) {
       if (o && o.coupon_code && o.status !== 'cancelled') {
         const s = byCode.get(o.coupon_code) || { count: 0, totalDiscount: 0 };
         s.count += 1;
         s.totalDiscount += Number(o.discount) || 0;
         byCode.set(o.coupon_code, s);
+        const pu = byCodeProducts.get(o.coupon_code) || {};
+        for (const it of o.items || []) {
+          if (it && it.product_id) pu[it.product_id] = (pu[it.product_id] || 0) + (Number(it.qty) || 0);
+        }
+        byCodeProducts.set(o.coupon_code, pu);
       }
     }
     for (const c of list) {
       const s = byCode.get(c.code) || { count: 0, totalDiscount: 0 };
       c.usage_count = s.count;
       c.total_discount = s.totalDiscount;
+      c.product_usage = byCodeProducts.get(c.code) || {};
     }
     return res.json(list);
   } catch (err) { return next(err); }
@@ -2345,9 +2410,23 @@ app.get('/api/manage/coupons', authMiddleware, managerMiddleware, async (_req, r
 // validation path so the two endpoints can never disagree (fix-batch-48).
 // Returns { fields } or { error } (a validate-style error code).
 function parseCouponBody(body) {
-  const { type = 'percent', value, note = '', active = true, brands, products, customers, valid_from, valid_until, usage_limit, new_customer_only } = body || {};
+  const { type = 'percent', value, note = '', active = true, brands, products, customers, valid_from, valid_until, usage_limit, new_customer_only, product_qtys } = body || {};
   if (typeof value !== 'number') return { error: 'code_and_value_required' };
   const cleanArr = (v) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []);
+  const prodList = cleanArr(products);
+  // Per-product qty caps (fix-batch-49): {productId: maxUnits}. A cap for a
+  // product not in the scope list is dropped; blank/absent = no cap.
+  let productQtys = null;
+  if (product_qtys && typeof product_qtys === 'object' && !Array.isArray(product_qtys)) {
+    productQtys = {};
+    for (const [id, v] of Object.entries(product_qtys)) {
+      if (!prodList.includes(id)) continue;
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1) return { error: 'invalid_product_qty' };
+      productQtys[id] = n;
+    }
+    if (!Object.keys(productQtys).length) productQtys = null;
+  }
   const cleanDate = (v) => {
     if (v == null || String(v).trim() === '') return null;
     const d = new Date(v);
@@ -2366,8 +2445,9 @@ function parseCouponBody(body) {
     type, value, note, active: Boolean(active),
     valid_from: fromISO, valid_until: untilISO,
     usage_limit: limit, new_customer_only: Boolean(new_customer_only),
+    product_qtys: productQtys,
     brands: cleanArr(brands),
-    products: cleanArr(products),
+    products: prodList,
     // Customer scope is stored as normalised phones; invalid ones are dropped.
     customers: cleanArr(customers).map((p) => normalizePhone(p)).filter((p) => isValidMyanmarPhone(p)),
   } };
@@ -2391,6 +2471,7 @@ app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, r
     }
     if (coupon.usage_limit != null) scopeBits.push(`limit ${coupon.usage_limit}`);
     if (coupon.new_customer_only) scopeBits.push('new customers only');
+    if (coupon.product_qtys) scopeBits.push(Object.keys(coupon.product_qtys).length + ' qty caps');
     await logActivity(req, 'coupon_create', 'coupon', coupon.code, `${coupon.type} ${coupon.value}${coupon.type === 'percent' ? '%' : ' Ks'}${scopeBits.length ? ' — ' + scopeBits.join('; ') : ''}`);
     return res.status(201).json(coupon);
   } catch (err) { return next(err); }
