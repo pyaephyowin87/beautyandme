@@ -159,6 +159,7 @@ const I18N = {
     coupon_validity: 'သက်တမ်း', coupon_valid_from: 'စတင်မယ့် ရက်', coupon_valid_until: 'ပြီးဆုံးမယ့် ရက်', coupon_validity_hint: 'မဖြည့်ရင် ကန့်သတ်ချက် မရှိဘူး — ရက်က ရန်ကုန် အချိန်နဲ့', coupon_upcoming: 'မစသေးပါ', coupon_expired_tag: 'သက်တမ်းကုန်ပြီ', coupon_active_tag: 'အလုပ်လုပ်နေတယ်', coupon_inactive_tag: 'ပိတ်ထားတယ်', coupon_no_limit: 'ကန့်သတ်ချက် မရှိ', coupon_until: 'ထိ အကျိုးဝင်တယ်',
     coupon_usage_limit: 'လူ limit (ယောက်)', coupon_usage_limit_hint: 'မဖြည့်ရင် ကန့်သတ်ချက် မရှိ', coupon_new_customer_only: 'Customer အသစ်တွေအတွက်ပဲ', coupon_limit_reached: 'ဒီ coupon limit ပြည့်သွားပါပြီ', coupon_not_new_customer: 'ဒီ coupon က customer အသစ်တွေအတွက်ပဲ သုံးလို့ရပါတယ်', coupon_phone_required: 'ဖုန်း နံပါတ် ထည့်ပြီးမှ ဒီ coupon သုံးလို့ရပါတယ်', coupon_limit_prefix: 'လူ', coupon_limit_suffix: 'ယောက်ပဲ သုံးလို့ရတယ်', coupon_new_only_tag: 'Customer အသစ်တွေအတွက်ပဲ', coupon_used_label: 'သုံးထားတာ', coupon_vouchers: 'စောင်', coupon_discount_given: 'လျှော့ပေးပြီးသား', coupon_edit: 'ပြင်မယ်', action_coupon_update: 'Coupon ပြင်တယ်',
     coupon_product_qty: 'Qty limit', coupon_product_qty_hint: 'ပစ္စည်း တစ်ခု ချင်းစီ ဘေးက box မှာ အရေအတွက် ထည့်လို့ရတယ် — မဖြည့်ရင် ကန့်သတ်ချက် မရှိ', coupon_qty_cap_suffix: 'ခုထိပဲ', coupon_qty_sold: 'ခု ရောင်းပြီးသား',
+    coupon_stackable: 'Sale ပစ္စည်းနဲ့ ထပ်သုံးလို့ရတယ်', coupon_stackable_hint: 'ပိတ်ထားရင် sale ဈေး ရှိနေတဲ့ ပစ္စည်းတွေကို coupon လျှော့မပေးဘူး', coupon_not_stackable: 'Sale ပစ္စည်းတွေ မပါဘူး',
     coupon_no_eligible_items: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ ပစ္စည်း / brand တွေအတွက်ပဲ သုံးလို့ရပါတယ် — cart ထဲမှာ အဲဒါတွေ မရှိသေးပါ',
     search_products_ph: 'ပစ္စည်း ရှာပါ…', no_products_found: 'ပစ္စည်း မတွေ့ပါ',
     shop_phone: 'ဖုန်း', shop_hours: 'ဖွင့်ချိန် — နေ့စဉ် မနက် ၉ နာရီ မှ ညနေ ၆ နာရီ',
@@ -328,6 +329,7 @@ const I18N = {
     coupon_validity: 'Validity period', coupon_valid_from: 'Valid from', coupon_valid_until: 'Valid until', coupon_validity_hint: 'Leave blank for no limit — dates are Yangon time', coupon_upcoming: 'Upcoming', coupon_expired_tag: 'Expired', coupon_active_tag: 'Active', coupon_inactive_tag: 'Disabled', coupon_no_limit: 'No limit', coupon_until: 'valid until',
     coupon_usage_limit: 'People limit', coupon_usage_limit_hint: 'Leave blank for no limit', coupon_new_customer_only: 'New customers only', coupon_limit_reached: 'This coupon has reached its usage limit', coupon_not_new_customer: 'This coupon is only for new customers', coupon_phone_required: 'Enter your phone number to use this coupon', coupon_limit_prefix: 'First', coupon_limit_suffix: 'people only', coupon_new_only_tag: 'New customers only', coupon_used_label: 'Used', coupon_vouchers: 'vouchers', coupon_discount_given: 'Discount given', coupon_edit: 'Edit', action_coupon_update: 'Updated a coupon',
     coupon_product_qty: 'Qty limit', coupon_product_qty_hint: 'Set a qty per product in the box beside it — leave blank for no limit', coupon_qty_cap_suffix: 'units max', coupon_qty_sold: 'sold',
+    coupon_stackable: 'Stacks with sale items', coupon_stackable_hint: 'When off, items already on sale get no coupon discount', coupon_not_stackable: 'Sale items excluded',
     coupon_no_eligible_items: 'This coupon only applies to selected products / brands — none are in your cart yet',
     search_products_ph: 'Search products…', no_products_found: 'No products found',
     shop_phone: 'Phone', shop_hours: 'Open daily 9 AM – 6 PM',
@@ -1224,12 +1226,13 @@ async function openCouponList() {
       const untilLine = c.valid_until ? '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(fmtDate(c.valid_until)) + ' ' + esc(t('coupon_until')) + '</div>' : '';
       const limitLine = c.usage_limit != null ? '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(t('coupon_limit_prefix')) + ' ' + esc(String(c.usage_limit)) + ' ' + esc(t('coupon_limit_suffix')) + '</div>' : '';
       const newLine = c.new_customer_only ? '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(t('coupon_new_only_tag')) + '</div>' : '';
+      const stackLine = c.stackable === false ? '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(t('coupon_not_stackable')) + '</div>' : '';
       const qtyLines = (c.product_qtys && c.products) ? c.products.filter((id) => c.product_qtys[id] != null).map((id) => {
         const name = (c.product_names && c.product_names[c.products.indexOf(id)]) || id;
         return '<div class="pa-name" style="font-size:12px;color:var(--muted)">• ' + esc(name) + ': ' + esc(String(c.product_qtys[id])) + ' ' + esc(t('coupon_qty_cap_suffix')) + '</div>';
       }).join('') : '';
       return '<div class="pay-account"><div class="pa-info"><div class="pa-method">' + esc(c.code) + '</div>' +
-        '<div class="pa-name">' + esc(val) + '</div><div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(scope) + '</div>' + untilLine + limitLine + newLine + qtyLines + '</div>' +
+        '<div class="pa-name">' + esc(val) + '</div><div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(scope) + '</div>' + untilLine + limitLine + newLine + stackLine + qtyLines + '</div>' +
         '<button type="button" class="copy-btn" data-use="' + esc(c.code) + '">' + esc(t('use_coupon')) + '</button></div>';
     }).join('');
     $$('[data-use]', body).forEach((b) => b.addEventListener('click', () => {
@@ -2987,6 +2990,7 @@ async function renderManageCoupons(body) {
     '<div class="row-flex" style="margin-top:6px"><input id="cpUsageLimit" type="number" min="1" placeholder="' + esc(t('coupon_usage_limit')) + '" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;width:140px">' +
     '<label style="display:flex;align-items:center;gap:8px;font-size:14px"><input id="cpNewOnly" type="checkbox" style="width:18px;height:18px"> ' + esc(t('coupon_new_customer_only')) + '</label></div>' +
     '<div style="margin-top:4px;font-size:12px;color:var(--muted)">' + esc(t('coupon_usage_limit_hint')) + '</div>' +
+    '<div style="margin-top:10px"><label style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input id="cpStackable" type="checkbox" checked style="width:18px;height:18px;margin-top:2px"> <span>' + esc(t('coupon_stackable')) + '<br><span style="font-size:12px;color:var(--muted)">' + esc(t('coupon_stackable_hint')) + '</span></span></label></div>' +
     '<div style="margin-top:14px;font-weight:700">' + esc(t('coupon_scope')) + '</div>' +
     '<div style="margin-top:8px;font-size:13px;color:var(--muted)">' + esc(t('scope_brands')) + '</div>' +
     '<div id="cpBrandChips" class="chips" style="margin-top:4px"></div>' +
@@ -3092,7 +3096,7 @@ async function renderManageCoupons(body) {
         '<div class="pay-account"><div class="pa-info"><div class="pa-method">' + esc(c.code) + '</div>' +
         '<div class="pa-name">' + esc(c.type) + ' — ' + esc(String(c.value)) + (c.type === 'percent' ? '%' : ' Ks') + '</div>' +
         '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponScopeText(c)) + '</div>' +
-        '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponValidityText(c)) + ' • ' + esc(couponValidityTag(c)) + '</div>' +
+        '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponValidityText(c)) + ' • ' + esc(couponValidityTag(c)) + (c.stackable === false ? ' • ' + esc(t('coupon_not_stackable')) : '') + '</div>' +
         '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponUsageText(c)) + '</div>' +
         (couponProductQtyText(c) ? '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponProductQtyText(c)) + '</div>' : '') + '</div>' +
         '<div style="display:flex;flex-direction:column;gap:6px">' +
@@ -3113,7 +3117,7 @@ async function renderManageCoupons(body) {
     $('#cpCode').value = ''; $('#cpCode').disabled = false;
     $('#cpType').value = 'percent'; $('#cpValue').value = '';
     $('#cpValidFrom').value = ''; $('#cpValidUntil').value = '';
-    $('#cpUsageLimit').value = ''; $('#cpNewOnly').checked = false;
+    $('#cpUsageLimit').value = ''; $('#cpNewOnly').checked = false; $('#cpStackable').checked = true;
     selBrands.clear(); selProducts.clear(); selProductQtys.clear(); selCustomers.clear();
     $$('[data-cpbrand]', brandWrap).forEach((ch) => ch.classList.remove('active'));
     paintPicked();
@@ -3132,6 +3136,7 @@ async function renderManageCoupons(body) {
     $('#cpValidUntil').value = isoToYangonInput(c.valid_until);
     $('#cpUsageLimit').value = c.usage_limit != null ? String(c.usage_limit) : '';
     $('#cpNewOnly').checked = !!c.new_customer_only;
+    $('#cpStackable').checked = c.stackable !== false;
     selBrands.clear(); (c.brands || []).forEach((b) => selBrands.add(b));
     selProducts.clear();
     (c.products || []).forEach((id, i) => selProducts.set(id, { name: (c.product_names && c.product_names[i]) || id, brand: '', price: 0 }));
@@ -3151,7 +3156,7 @@ async function renderManageCoupons(body) {
     if (!code || !value) { toast(t('fill_all')); return; }
     const productQtys = {};
     selProductQtys.forEach((v, k) => { if (Number.isInteger(v) && v >= 1) productQtys[k] = v; });
-    const body = { code: code, type: type, value: value, valid_from: yangonInputToISO($('#cpValidFrom').value), valid_until: yangonInputToISO($('#cpValidUntil').value), usage_limit: $('#cpUsageLimit').value ? Number($('#cpUsageLimit').value) : null, new_customer_only: $('#cpNewOnly').checked, product_qtys: Object.keys(productQtys).length ? productQtys : null, brands: Array.from(selBrands), products: Array.from(selProducts.keys()), customers: Array.from(selCustomers) };
+    const body = { code: code, type: type, value: value, valid_from: yangonInputToISO($('#cpValidFrom').value), valid_until: yangonInputToISO($('#cpValidUntil').value), usage_limit: $('#cpUsageLimit').value ? Number($('#cpUsageLimit').value) : null, new_customer_only: $('#cpNewOnly').checked, stackable: $('#cpStackable').checked, product_qtys: Object.keys(productQtys).length ? productQtys : null, brands: Array.from(selBrands), products: Array.from(selProducts.keys()), customers: Array.from(selCustomers) };
     try {
       if (editingCode) await api('/manage/coupons/' + encodeURIComponent(editingCode), { method: 'PUT', body: JSON.stringify(body) });
       else await api('/manage/coupons', { method: 'POST', body: JSON.stringify(body) });
