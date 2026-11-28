@@ -490,7 +490,9 @@ app.get('/api/products', async (req, res, next) => {
     const keywords = String(q).toLowerCase().split(/\s+/).filter(Boolean);
     if (keywords.length) {
       items = items.filter((p) => {
-        const hay = `${p.name} ${p.brand} ${p.category} ${deriveProductType(p)} ${(PRODUCT_TYPE_LABELS[deriveProductType(p)] || '')} ${(p.options || []).map((o) => o.label).join(' ')}`.toLowerCase();
+        // Barcode/SKU is searchable too (fix-batch-51): staff can type or
+        // scan a barcode in the search box and land on the product.
+        const hay = `${p.name} ${p.brand} ${p.category} ${deriveProductType(p)} ${(PRODUCT_TYPE_LABELS[deriveProductType(p)] || '')} ${(p.options || []).map((o) => o.label).join(' ')} ${p.sku || ''} ${(p.options || []).map((o) => o.sku || '').join(' ')}`.toLowerCase();
         return keywords.every((k) => hay.includes(k));
       });
     }
@@ -1985,7 +1987,9 @@ app.get('/api/manage/products', authMiddleware, managerMiddleware, async (req, r
     const keywords = String(q).toLowerCase().split(/\s+/).filter(Boolean);
     if (keywords.length) {
       items = items.filter((p) => {
-        const hay = `${p.name} ${p.brand} ${p.category} ${deriveProductType(p)} ${(PRODUCT_TYPE_LABELS[deriveProductType(p)] || '')} ${(p.options || []).map((o) => o.label).join(' ')}`.toLowerCase();
+        // Barcode/SKU is searchable too (fix-batch-51): staff can type or
+        // scan a barcode in the search box and land on the product.
+        const hay = `${p.name} ${p.brand} ${p.category} ${deriveProductType(p)} ${(PRODUCT_TYPE_LABELS[deriveProductType(p)] || '')} ${(p.options || []).map((o) => o.label).join(' ')} ${p.sku || ''} ${(p.options || []).map((o) => o.sku || '').join(' ')}`.toLowerCase();
         return keywords.every((k) => hay.includes(k));
       });
     }
@@ -2060,6 +2064,22 @@ app.post('/api/manage/products', authMiddleware, managerMiddleware, async (req, 
     if (existing.some((p) => normName(p.name) === normName(name))) {
       return res.status(400).json({ error: 'duplicate_product' });
     }
+    // SKU uniqueness (fix-batch-51): the new barcode must not already belong
+    // to another product or option — and not to one of its own options.
+    const newSku = String(b.sku || '').trim() || null;
+    if (newSku && skuClash(existing, newSku, null)) return res.status(400).json({ error: 'duplicate_sku' });
+    if (options) {
+      for (const o of options) {
+        if (o.sku && skuClash(existing, o.sku, null)) return res.status(400).json({ error: 'duplicate_sku' });
+        if (newSku && o.sku === newSku) return res.status(400).json({ error: 'duplicate_sku' });
+      }
+      const seenSkus = new Set();
+      for (const o of options) {
+        if (!o.sku) continue;
+        if (seenSkus.has(o.sku)) return res.status(400).json({ error: 'duplicate_sku' });
+        seenSkus.add(o.sku);
+      }
+    }
     let slug = slugify(name);
     let id = slug;
     let n = 2;
@@ -2095,13 +2115,14 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
   try {
     const p = await store.getProduct(req.params.id);
     if (!p) return res.status(404).json({ error: 'product_not_found' });
-    const { sale_price, is_new, best_seller, sale_featured, price, option_prices, stock, option_stock, name, brand, category, note } = req.body || {};
+    const { sale_price, is_new, best_seller, sale_featured, price, option_prices, stock, option_stock, name, brand, category, note, sku, option_skus } = req.body || {};
     const before = {
       price: p.price, sale_price: p.sale_price,
       stock: p.stock ?? null,
       best_seller: Boolean(p.best_seller), sale_featured: Boolean(p.sale_featured),
       name: p.name, brand: p.brand, category: p.category || '', note: p.note || '',
-      options: Array.isArray(p.options) ? p.options.map((o) => ({ label: o.label, price: o.price, stock: o.stock ?? null })) : [],
+      sku: p.sku ?? null,
+      options: Array.isArray(p.options) ? p.options.map((o) => ({ label: o.label, price: o.price, stock: o.stock ?? null, sku: o.sku ?? null })) : [],
     };
     // Name / brand / category / description. The id (slug) never changes on
     // rename: orders, wishlists and carts reference the id, and the slug is
@@ -2170,6 +2191,32 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
     if (is_new !== undefined) p.is_new = Boolean(is_new);
     if (best_seller !== undefined) p.best_seller = Boolean(best_seller);
     if (sale_featured !== undefined) p.sale_featured = Boolean(sale_featured);
+    // SKU / barcode (fix-batch-51): editable — a product's barcode can
+    // change while its name stays the same. Duplicates are refused.
+    if (sku !== undefined) {
+      const cleanSku = String(sku || '').trim() || null;
+      if (cleanSku) {
+        const all = await store.listProducts();
+        if (skuClash(all, cleanSku, p.id)) return res.status(400).json({ error: 'duplicate_sku' });
+        if ((p.options || []).some((o) => o.sku && String(o.sku).trim() === cleanSku)) return res.status(400).json({ error: 'duplicate_sku' });
+      }
+      p.sku = cleanSku;
+    }
+    if (option_skus !== undefined && Array.isArray(p.options) && p.options.length) {
+      const entries = Object.entries(option_skus);
+      const all = await store.listProducts();
+      for (const [label, val] of entries) {
+        const clean = String(val || '').trim() || null;
+        if (!clean) continue;
+        if (skuClash(all, clean, p.id)) return res.status(400).json({ error: 'duplicate_sku' });
+        if (p.options.filter((o) => normName(o.label) !== normName(label)).some((o) => o.sku && String(o.sku).trim() === clean)) return res.status(400).json({ error: 'duplicate_sku' });
+        if (p.sku && String(p.sku).trim() === clean) return res.status(400).json({ error: 'duplicate_sku' });
+      }
+      for (const [label, val] of entries) {
+        const opt = p.options.find((o) => normName(o.label) === normName(label));
+        if (opt) opt.sku = String(val || '').trim() || null;
+      }
+    }
     syncInStock(p);
     await store.saveProduct(p);
     const changes = [];
@@ -2182,17 +2229,34 @@ app.patch('/api/manage/products/:id', authMiddleware, managerMiddleware, async (
     if ((before.stock ?? null) !== (p.stock ?? null)) changes.push(`stock: ${before.stock == null ? '—' : before.stock} → ${p.stock == null ? '—' : p.stock}`);
     if (before.best_seller !== Boolean(p.best_seller)) changes.push(`best seller: ${before.best_seller ? 'on' : 'off'} → ${p.best_seller ? 'on' : 'off'}`);
     if (before.sale_featured !== Boolean(p.sale_featured)) changes.push(`sale featured: ${before.sale_featured ? 'on' : 'off'} → ${p.sale_featured ? 'on' : 'off'}`);
+    if ((before.sku ?? null) !== (p.sku ?? null)) changes.push(`sku: ${before.sku || '—'} → ${p.sku || '—'}`);
     if (Array.isArray(p.options)) {
       for (const o of p.options) {
         const b = before.options.find((x) => normName(x.label) === normName(o.label));
         if (b && b.price !== o.price) changes.push(`${o.label}: ${b.price} → ${o.price} Ks`);
         if (b && (b.stock ?? null) !== (o.stock ?? null)) changes.push(`${o.label} stock: ${b.stock == null ? '—' : b.stock} → ${o.stock == null ? '—' : o.stock}`);
+        if (b && (b.sku ?? null) !== (o.sku ?? null)) changes.push(`${o.label} sku: ${b.sku || '—'} → ${o.sku || '—'}`);
       }
     }
     if (changes.length) await logActivity(req, 'product_update', 'product', p.id, `${p.name} — ${changes.join('; ')}`);
     return res.json(p);
   } catch (err) { return next(err); }
 });
+
+// SKU uniqueness (fix-batch-51): a barcode identifies ONE product (or ONE
+// option). The same code on two products would break the POS merge, so
+// creates and edits refuse it (400 duplicate_sku). excludeProductId lets a
+// product keep its own code when nothing changed.
+function skuClash(products, sku, excludeProductId) {
+  const needle = String(sku || '').trim();
+  if (!needle) return null;
+  for (const x of products) {
+    if (String(x.id) === String(excludeProductId)) continue;
+    if (x.sku && String(x.sku).trim() === needle) return x;
+    if ((x.options || []).some((o) => o.sku && String(o.sku).trim() === needle)) return x;
+  }
+  return null;
+}
 
 const XLSX = require('xlsx');
 
