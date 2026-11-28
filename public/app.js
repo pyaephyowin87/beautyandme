@@ -160,6 +160,7 @@ const I18N = {
     coupon_usage_limit: 'လူ limit (ယောက်)', coupon_usage_limit_hint: 'မဖြည့်ရင် ကန့်သတ်ချက် မရှိ', coupon_new_customer_only: 'Customer အသစ်တွေအတွက်ပဲ', coupon_limit_reached: 'ဒီ coupon limit ပြည့်သွားပါပြီ', coupon_not_new_customer: 'ဒီ coupon က customer အသစ်တွေအတွက်ပဲ သုံးလို့ရပါတယ်', coupon_phone_required: 'ဖုန်း နံပါတ် ထည့်ပြီးမှ ဒီ coupon သုံးလို့ရပါတယ်', coupon_limit_prefix: 'လူ', coupon_limit_suffix: 'ယောက်ပဲ သုံးလို့ရတယ်', coupon_new_only_tag: 'Customer အသစ်တွေအတွက်ပဲ', coupon_used_label: 'သုံးထားတာ', coupon_vouchers: 'စောင်', coupon_discount_given: 'လျှော့ပေးပြီးသား', coupon_edit: 'ပြင်မယ်', action_coupon_update: 'Coupon ပြင်တယ်',
     coupon_product_qty: 'Qty limit', coupon_product_qty_hint: 'ပစ္စည်း တစ်ခု ချင်းစီ ဘေးက box မှာ အရေအတွက် ထည့်လို့ရတယ် — မဖြည့်ရင် ကန့်သတ်ချက် မရှိ', coupon_qty_cap_suffix: 'ခုထိပဲ', coupon_qty_sold: 'ခု ရောင်းပြီးသား',
     coupon_stackable: 'Sale ပစ္စည်းနဲ့ ထပ်သုံးလို့ရတယ်', coupon_stackable_hint: 'ပိတ်ထားရင် sale ဈေး ရှိနေတဲ့ ပစ္စည်းတွေကို coupon လျှော့မပေးဘူး', coupon_not_stackable: 'Sale ပစ္စည်းတွေ မပါဘူး',
+    sku: 'SKU / Barcode', scan: 'Scan', scan_title: 'Barcode စကင်ဖတ်မယ်', scan_hint: 'Barcode ကို ကင်မရာ ဘောင်ထဲ ထည့်ပြပါ', scan_failed: 'ဖတ်မရပါ — လက်နဲ့ ရိုက်ထည့်ပါ', duplicate_sku: 'ဒီ barcode ရှိပြီးသား ဖြစ်နေပါတယ်',
     coupon_no_eligible_items: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ ပစ္စည်း / brand တွေအတွက်ပဲ သုံးလို့ရပါတယ် — cart ထဲမှာ အဲဒါတွေ မရှိသေးပါ',
     search_products_ph: 'ပစ္စည်း ရှာပါ…', no_products_found: 'ပစ္စည်း မတွေ့ပါ',
     shop_phone: 'ဖုန်း', shop_hours: 'ဖွင့်ချိန် — နေ့စဉ် မနက် ၉ နာရီ မှ ညနေ ၆ နာရီ',
@@ -330,6 +331,7 @@ const I18N = {
     coupon_usage_limit: 'People limit', coupon_usage_limit_hint: 'Leave blank for no limit', coupon_new_customer_only: 'New customers only', coupon_limit_reached: 'This coupon has reached its usage limit', coupon_not_new_customer: 'This coupon is only for new customers', coupon_phone_required: 'Enter your phone number to use this coupon', coupon_limit_prefix: 'First', coupon_limit_suffix: 'people only', coupon_new_only_tag: 'New customers only', coupon_used_label: 'Used', coupon_vouchers: 'vouchers', coupon_discount_given: 'Discount given', coupon_edit: 'Edit', action_coupon_update: 'Updated a coupon',
     coupon_product_qty: 'Qty limit', coupon_product_qty_hint: 'Set a qty per product in the box beside it — leave blank for no limit', coupon_qty_cap_suffix: 'units max', coupon_qty_sold: 'sold',
     coupon_stackable: 'Stacks with sale items', coupon_stackable_hint: 'When off, items already on sale get no coupon discount', coupon_not_stackable: 'Sale items excluded',
+    sku: 'SKU / Barcode', scan: 'Scan', scan_title: 'Scan barcode', scan_hint: 'Point the camera at the barcode', scan_failed: "Couldn't read it — type it in", duplicate_sku: 'This barcode is already used',
     coupon_no_eligible_items: 'This coupon only applies to selected products / brands — none are in your cart yet',
     search_products_ph: 'Search products…', no_products_found: 'No products found',
     shop_phone: 'Phone', shop_hours: 'Open daily 9 AM – 6 PM',
@@ -2523,6 +2525,7 @@ async function renderManageCatalog(body) {
     '<div class="mg-card"><div class="row-flex">' +
     '<input id="mgSearch" type="search" placeholder="' + esc(t('search_products')) + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:160px">' +
     '<button class="btn btn-primary" type="button" id="mgSearchBtn">' + esc(t('search_btn')) + '</button>' +
+    (window.Html5Qrcode ? '<button class="btn btn-outline" type="button" id="mgScanBtn">📷 ' + esc(t('scan')) + '</button>' : '') +
     '</div><button class="btn btn-primary btn-block" type="button" id="mgAddBtn" style="margin-top:10px">+ ' + esc(t('add_product')) + '</button>' +
     '<div class="row-flex" style="margin-top:10px">' +
     '<button class="btn btn-outline" type="button" id="mgExportBtn" style="flex:1">' + esc(t('excel_export')) + '</button>' +
@@ -2546,6 +2549,8 @@ async function renderManageCatalog(body) {
   };
   $('#mgSearchBtn').addEventListener('click', doSearch);
   $('#mgSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  const mgScanBtn = $('#mgScanBtn');
+  if (mgScanBtn) mgScanBtn.addEventListener('click', () => openBarcodeScanner((code) => { $('#mgSearch').value = code; doSearch(); }));
   $('#mgAddBtn').addEventListener('click', openAddProduct);
   // --- Catalog Excel export / import ---
   let mgImportFile = null;
@@ -2664,6 +2669,41 @@ function downscaleImage(file, max) {
 // comes from the options and the sale-price field hides (sale prices do not
 // apply to option lines at checkout). After saving, the filter resets to
 // All so the new product is visible right away.
+// Barcode scanner (fix-batch-51): the phone camera reads a barcode into a
+// field. html5-qrcode is bundled locally (public/html5-qrcode.min.js) — no
+// CDN needed. A barcode's check digit means a misread fails instead of
+// filling a wrong number. If the library or the camera is unavailable, the
+// scan buttons stay hidden and typing still works.
+let scanQr = null;
+function openBarcodeScanner(onDecoded) {
+  if (!window.Html5Qrcode) { toast(t('scan_failed')); return; }
+  let modal = $('#scanModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'scanModal';
+    modal.className = 'scan-modal';
+    modal.innerHTML = '<div class="scan-box"><h3>' + esc(t('scan_title')) + '</h3>' +
+      '<div id="scanReader"></div>' +
+      '<div class="meta-line" style="margin-top:8px">' + esc(t('scan_hint')) + '</div>' +
+      '<button class="btn btn-outline btn-block" type="button" id="scanClose" style="margin-top:10px">' + esc(t('cancel')) + '</button></div>';
+    document.body.appendChild(modal);
+    modal.querySelector('#scanClose').addEventListener('click', closeBarcodeScanner);
+  }
+  modal.style.display = 'flex';
+  const qr = new Html5Qrcode('scanReader');
+  scanQr = qr;
+  qr.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 250, height: 140 }, formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39] }, (text) => {
+    const code = String(text || '').trim();
+    if (!code) return;
+    closeBarcodeScanner();
+    onDecoded(code);
+  }, () => {}).catch(() => { closeBarcodeScanner(); toast(t('scan_failed')); });
+}
+async function closeBarcodeScanner() {
+  const modal = $('#scanModal');
+  if (modal) modal.style.display = 'none';
+  if (scanQr) { try { await scanQr.stop(); } catch (e) {} try { scanQr.clear(); } catch (e) {} scanQr = null; }
+}
 async function openAddProduct() {
   if (!state.brands || !state.brands.length) {
     try { state.brands = await api('/brands'); } catch (e) { state.brands = []; }
@@ -2684,6 +2724,7 @@ async function openAddProduct() {
     '<div class="field"><label>' + esc(t('price')) + ' (Ks) *</label><input id="apPrice" type="number" min="1" step="500" placeholder="67000"></div>' +
     '<div class="field" id="apSaleField"><label>' + esc(t('sale_price')) + ' (Ks)</label><input id="apSale" type="number" min="0" step="500" placeholder=""></div>' +
     '<div class="field"><label>' + esc(t('stock_qty')) + '</label><input id="apStock" type="number" min="0" step="1" placeholder="—"></div>' +
+    '<div class="field"><label>' + esc(t('sku')) + '</label><div style="display:flex;gap:6px"><input id="apSku" type="text" placeholder="e.g. 8809213803383" style="flex:1;min-width:0">' + (window.Html5Qrcode ? '<button type="button" class="btn btn-outline" id="apScanBtn">📷 ' + esc(t('scan')) + '</button>' : '') + '</div></div>' +
     '<div class="field"><label>' + esc(t('add_photo')) + '</label><input id="apPhoto" type="file" accept="image/*"><div id="apPhotoPreview" style="margin-top:8px"></div></div>' +
     '<div class="field"><label>' + esc(t('select_option')) + '</label><div id="apOptions"></div><button type="button" class="btn btn-outline" id="apAddOpt" style="margin-top:6px">+ ' + esc(t('add_option')) + '</button></div>' +
     '<div class="error-box" id="apError" hidden></div>' +
@@ -2701,6 +2742,7 @@ async function openAddProduct() {
       '<input type="text" data-aplabel placeholder="' + esc(t('option_label')) + '" style="flex:1;min-width:0;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">' +
       '<input type="number" min="1" step="500" data-apprice placeholder="Ks" style="width:92px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">' +
       '<input type="number" min="0" step="1" data-apstock placeholder="—" style="width:64px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">' +
+      '<input type="text" data-apsku placeholder="SKU" style="width:110px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px">' +
       '<button type="button" data-aprm style="border:0;background:none;color:var(--muted);font-size:16px;padding:0 4px">✕</button>';
     row.querySelector('[data-aprm]').addEventListener('click', () => { row.remove(); syncApSaleField(); });
     $('#apOptions').appendChild(row);
@@ -2730,6 +2772,7 @@ async function openAddProduct() {
       label: row.querySelector('[data-aplabel]').value.trim(),
       price: Number(row.querySelector('[data-apprice]').value),
       stock: row.querySelector('[data-apstock]').value.trim() === '' ? null : Number(row.querySelector('[data-apstock]').value),
+      sku: row.querySelector('[data-apsku]').value.trim() || null,
     }));
     const stockVal = stockRaw === '' ? null : Number(stockRaw);
     if (!name || !brand || (!options.length && (!price || price <= 0)) ||
@@ -2743,6 +2786,7 @@ async function openAddProduct() {
       price: options.length ? undefined : price,
       sale_price: (options.length || saleRaw === '') ? null : Number(saleRaw),
       stock: stockVal,
+      sku: $('#apSku').value.trim() || null,
       options: options.length ? options : undefined,
     };
     if (apPhotoData) payload.image_data = apPhotoData;
@@ -2756,10 +2800,12 @@ async function openAddProduct() {
       loadMgCatalog(true);
     } catch (e) {
       btn.disabled = false;
-      err.textContent = (e.data && e.data.error === 'duplicate_product') ? t('duplicate_product') : t('error_load');
+      err.textContent = (e.data && e.data.error === 'duplicate_product') ? t('duplicate_product') : (e.data && e.data.error === 'duplicate_sku') ? t('duplicate_sku') : t('error_load');
       err.hidden = false;
     }
   });
+  const apScanBtn = $('#apScanBtn');
+  if (apScanBtn) apScanBtn.addEventListener('click', () => openBarcodeScanner((code) => { $('#apSku').value = code; }));
   openOverlay('#addProductOverlay', '#addProductModal');
 }
 // Edit an existing product: name, brand, category and description.
@@ -2859,10 +2905,16 @@ function paintMgCatalog() {
       '</div><div style="min-width:0"><strong>' + esc(p.name) + '</strong><br><span style="color:var(--muted);font-size:12px">' + esc(p.brand || '') + '</span>' +
       ' <button type="button" data-edit="' + esc(String(p.id)) + '" style="border:0;background:none;color:var(--accent);font-size:12px;padding:0 2px;cursor:pointer">✏️ ' + esc(t('edit_product')) + '</button>' +
       (p.image_url ? ' <button type="button" data-rmphoto="' + esc(String(p.id)) + '" title="' + esc(t('remove_photo')) + '" style="border:0;background:none;color:var(--muted);font-size:13px;padding:0 2px">✕</button>' : '') +
+      (Array.isArray(p.options) && p.options.length ? '' :
+        '<div style="display:flex;gap:6px;align-items:center;margin-top:4px">' +
+        '<input type="text" value="' + esc(p.sku || '') + '" placeholder="SKU / Barcode" data-sku="' + esc(String(p.id)) + '" style="flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:12px">' +
+        (window.Html5Qrcode ? '<button type="button" data-scansku="' + esc(String(p.id)) + '" title="' + esc(t('scan_title')) + '" style="border:1.5px solid var(--line);background:#fff;border-radius:8px;padding:6px 8px;font-size:14px;flex:none">📷</button>' : '') +
+        '</div>') +
       (Array.isArray(p.options) && p.options.length ? '<div style="margin-top:6px">' + p.options.map((o) =>
         '<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span style="font-size:12px;color:var(--muted);flex:1;min-width:0">' + esc(o.label) + '</span>' +
         '<input type="number" min="1" step="500" value="' + o.price + '" data-optprice="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:92px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px">' +
-        '<input type="number" min="0" step="1" value="' + (o.stock != null ? o.stock : '') + '" placeholder="—" title="' + esc(t('stock_qty')) + ' — 0 = ' + esc(t('out_stock')) + '" data-optstock="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:64px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px"></div>').join('') + '</div>' : '') +
+        '<input type="number" min="0" step="1" value="' + (o.stock != null ? o.stock : '') + '" placeholder="—" title="' + esc(t('stock_qty')) + ' — 0 = ' + esc(t('out_stock')) + '" data-optstock="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:64px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px">' +
+        '<input type="text" value="' + esc(o.sku || '') + '" placeholder="SKU" data-optsku="' + esc(String(p.id)) + '" data-label="' + esc(o.label) + '" style="width:110px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:12px"></div>').join('') + '</div>' : '') +
       '</div></div></td>' +
       '<td data-label="' + esc(t('price')) + '">' + (Array.isArray(p.options) && p.options.length
         ? fmt(p.price)
@@ -2951,6 +3003,38 @@ function paintMgCatalog() {
         btn.classList.toggle('on', on);
       } catch (e) { toast(t('error_load')); }
     });
+  });
+  // SKU / barcode (fix-batch-51): editable inline, like price and stock.
+  // A duplicate barcode is refused by the server (duplicate_sku).
+  $$('[data-sku]', wrap).forEach((inp) => {
+    inp.addEventListener('change', async () => {
+      const val = inp.value.trim();
+      try {
+        await api('/manage/products/' + encodeURIComponent(inp.dataset.sku), { method: 'PATCH', body: JSON.stringify({ sku: val || null }) });
+        const item = mgCatalog.items.find((x) => String(x.id) === inp.dataset.sku);
+        if (item) item.sku = val || null;
+        toast(t('saved'));
+      } catch (e) { toast((e.data && e.data.error === 'duplicate_sku') ? t('duplicate_sku') : t('error_load')); paintMgCatalog(); }
+    });
+  });
+  $$('[data-optsku]', wrap).forEach((inp) => {
+    inp.addEventListener('change', async () => {
+      const val = inp.value.trim();
+      try {
+        const updated = await api('/manage/products/' + encodeURIComponent(inp.dataset.optsku), { method: 'PATCH', body: JSON.stringify({ option_skus: { [inp.dataset.label]: val || null } }) });
+        const item = mgCatalog.items.find((x) => String(x.id) === inp.dataset.optsku);
+        if (item && updated) { Object.assign(item, updated); paintMgCatalog(); }
+        toast(t('saved'));
+      } catch (e) { toast((e.data && e.data.error === 'duplicate_sku') ? t('duplicate_sku') : t('error_load')); paintMgCatalog(); }
+    });
+  });
+  $$('[data-scansku]', wrap).forEach((b) => {
+    b.addEventListener('click', () => openBarcodeScanner((code) => {
+      const inp = wrap.querySelector('[data-sku="' + b.dataset.scansku + '"]');
+      if (!inp) return;
+      inp.value = code;
+      inp.dispatchEvent(new Event('change'));
+    }));
   });
   // Photo upload: tap a thumbnail (or the + box) to pick a photo for that product.
   $$('[data-photo]', wrap).forEach((th) => th.addEventListener('click', () => {
