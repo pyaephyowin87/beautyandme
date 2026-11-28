@@ -2275,6 +2275,31 @@ app.put('/api/manage/app-links', authMiddleware, ownerMiddleware, async (req, re
   } catch (err) { return next(err); }
 });
 
+// ---------- Home hero banner (fix-batch-44) ----------
+// One promo image in the top box on Home, changeable from Manage. When no
+// image is set the text hero shows, so nothing breaks. The image is stored
+// as a data URL in settings (same pattern as staff product photos) and the
+// frontend downscales it to max 1200px before upload; the server still caps
+// it at 2MB (express.json limit is 3mb).
+app.get('/api/hero', async (_req, res, next) => {
+  try {
+    const imageUrl = await store.getSetting('hero_banner');
+    return res.json({ image_url: imageUrl || null });
+  } catch (err) { return next(err); }
+});
+
+app.put('/api/manage/hero', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const { image_url = null } = req.body || {};
+    const value = image_url ? String(image_url) : null;
+    if (value && value.indexOf('data:image/') !== 0) return res.status(400).json({ error: 'bad_image' });
+    if (value && value.length > 2000000) return res.status(400).json({ error: 'image_too_large' });
+    await store.setSetting('hero_banner', value);
+    await logActivity(req, 'hero_banner_update', 'settings', 'hero_banner', value ? 'banner image set' : 'banner image removed');
+    return res.json({ ok: true, image_url: value });
+  } catch (err) { return next(err); }
+});
+
 app.get('/api/manage/settings/woocommerce', authMiddleware, ownerMiddleware, async (_req, res, next) => {
   try {
     const wc = await getWooConfig();
