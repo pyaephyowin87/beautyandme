@@ -794,6 +794,9 @@ function couponItemEligible(coupon, product) {
   if (!coupon || !product) return false;
   if (Array.isArray(coupon.brands) && coupon.brands.length && !coupon.brands.includes(product.brand)) return false;
   if (Array.isArray(coupon.products) && coupon.products.length && !coupon.products.includes(product.id)) return false;
+  // Non-stackable coupons (fix-batch-50) never discount items already on
+  // sale — stackable defaults to true, so older coupons keep stacking.
+  if (coupon.stackable === false && product.sale_price != null && product.sale_price < product.price) return false;
   return true;
 }
 function couponCustomerEligible(coupon, phone) {
@@ -1068,6 +1071,7 @@ app.get('/api/coupons', async (req, res, next) => {
         valid_until: c.valid_until || null,
         usage_limit: c.usage_limit != null ? c.usage_limit : null,
         new_customer_only: !!c.new_customer_only,
+        stackable: c.stackable !== false,
         product_qtys: c.product_qtys || null,
         brands: Array.isArray(c.brands) ? c.brands : [],
         products: Array.isArray(c.products) ? c.products : [],
@@ -2410,7 +2414,7 @@ app.get('/api/manage/coupons', authMiddleware, managerMiddleware, async (_req, r
 // validation path so the two endpoints can never disagree (fix-batch-48).
 // Returns { fields } or { error } (a validate-style error code).
 function parseCouponBody(body) {
-  const { type = 'percent', value, note = '', active = true, brands, products, customers, valid_from, valid_until, usage_limit, new_customer_only, product_qtys } = body || {};
+  const { type = 'percent', value, note = '', active = true, brands, products, customers, valid_from, valid_until, usage_limit, new_customer_only, product_qtys, stackable } = body || {};
   if (typeof value !== 'number') return { error: 'code_and_value_required' };
   const cleanArr = (v) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []);
   const prodList = cleanArr(products);
@@ -2446,6 +2450,9 @@ function parseCouponBody(body) {
     valid_from: fromISO, valid_until: untilISO,
     usage_limit: limit, new_customer_only: Boolean(new_customer_only),
     product_qtys: productQtys,
+    // Stackable (fix-batch-50): true unless explicitly false — older coupons
+    // and new coupons without the field keep stacking with sale prices.
+    stackable: stackable === undefined || stackable === null ? true : Boolean(stackable),
     brands: cleanArr(brands),
     products: prodList,
     // Customer scope is stored as normalised phones; invalid ones are dropped.
@@ -2472,6 +2479,7 @@ app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, r
     if (coupon.usage_limit != null) scopeBits.push(`limit ${coupon.usage_limit}`);
     if (coupon.new_customer_only) scopeBits.push('new customers only');
     if (coupon.product_qtys) scopeBits.push(Object.keys(coupon.product_qtys).length + ' qty caps');
+    if (coupon.stackable === false) scopeBits.push('not stackable');
     await logActivity(req, 'coupon_create', 'coupon', coupon.code, `${coupon.type} ${coupon.value}${coupon.type === 'percent' ? '%' : ' Ks'}${scopeBits.length ? ' — ' + scopeBits.join('; ') : ''}`);
     return res.status(201).json(coupon);
   } catch (err) { return next(err); }
