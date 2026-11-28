@@ -155,7 +155,8 @@ const I18N = {
     scope_customers_hint: 'ဖုန်းနံပါတ် ရိုက်ပြီး Add လုပ်ပါ — မထည့်ရင် customer အားလုံးအတွက်',
     coupon_for_brands: 'ဒီ brand တွေအတွက်သာ', coupon_for_products: 'ဒီ ပစ္စည်းတွေအတွက်သာ',
     coupon_for_customers: 'သတ်မှတ်ထားတဲ့ customer တွေအတွက်သာ', coupon_for_all: 'ပစ္စည်းအားလုံးအတွက်',
-    coupon_not_for_customer: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ customer တွေအတွက်ပဲ သုံးလို့ရပါတယ်',
+    coupon_not_for_customer: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ customer တွေအတွက်ပဲ သုံးလို့ရပါတယ်', coupon_not_yet_valid: 'ဒီ coupon က မစသေးပါ', coupon_expired: 'ဒီ coupon သက်တမ်းကုန်သွားပါပြီ',
+    coupon_validity: 'သက်တမ်း', coupon_valid_from: 'စတင်မယ့် ရက်', coupon_valid_until: 'ပြီးဆုံးမယ့် ရက်', coupon_validity_hint: 'မဖြည့်ရင် ကန့်သတ်ချက် မရှိဘူး — ရက်က ရန်ကုန် အချိန်နဲ့', coupon_upcoming: 'မစသေးပါ', coupon_expired_tag: 'သက်တမ်းကုန်ပြီ', coupon_active_tag: 'အလုပ်လုပ်နေတယ်', coupon_inactive_tag: 'ပိတ်ထားတယ်', coupon_no_limit: 'ကန့်သတ်ချက် မရှိ', coupon_until: 'ထိ အကျိုးဝင်တယ်',
     coupon_no_eligible_items: 'ဒီ coupon က သတ်မှတ်ထားတဲ့ ပစ္စည်း / brand တွေအတွက်ပဲ သုံးလို့ရပါတယ် — cart ထဲမှာ အဲဒါတွေ မရှိသေးပါ',
     search_products_ph: 'ပစ္စည်း ရှာပါ…', no_products_found: 'ပစ္စည်း မတွေ့ပါ',
     shop_phone: 'ဖုန်း', shop_hours: 'ဖွင့်ချိန် — နေ့စဉ် မနက် ၉ နာရီ မှ ညနေ ၆ နာရီ',
@@ -321,7 +322,8 @@ const I18N = {
     scope_customers_hint: 'Type a phone number and tap Add — leave empty for all customers',
     coupon_for_brands: 'For these brands only', coupon_for_products: 'For these products only',
     coupon_for_customers: 'For selected customers only', coupon_for_all: 'For all products',
-    coupon_not_for_customer: 'This coupon is only for selected customers',
+    coupon_not_for_customer: 'This coupon is only for selected customers', coupon_not_yet_valid: 'This coupon is not valid yet', coupon_expired: 'This coupon has expired',
+    coupon_validity: 'Validity period', coupon_valid_from: 'Valid from', coupon_valid_until: 'Valid until', coupon_validity_hint: 'Leave blank for no limit — dates are Yangon time', coupon_upcoming: 'Upcoming', coupon_expired_tag: 'Expired', coupon_active_tag: 'Active', coupon_inactive_tag: 'Disabled', coupon_no_limit: 'No limit', coupon_until: 'valid until',
     coupon_no_eligible_items: 'This coupon only applies to selected products / brands — none are in your cart yet',
     search_products_ph: 'Search products…', no_products_found: 'No products found',
     shop_phone: 'Phone', shop_hours: 'Open daily 9 AM – 6 PM',
@@ -491,6 +493,34 @@ function couponScopeText(c) {
   if (c.products && c.products.length) parts.push(t('coupon_for_products') + ': ' + ((c.product_names && c.product_names.length ? c.product_names : c.products).join(', ')));
   if ((c.customers && c.customers.length) || c.customers_only) parts.push(t('coupon_for_customers') + (c.customers && c.customers.length ? ' (' + c.customers.length + ')' : ''));
   return parts.length ? parts.join(' • ') : t('coupon_for_all');
+}
+// Client mirror of the server validity check (fix-batch-47): a coupon is
+// usable only while active AND inside [valid_from, valid_until].
+function couponIsUsableClient(c) {
+  if (!c || c.active === false) return false;
+  const now = Date.now();
+  if (c.valid_from && new Date(c.valid_from).getTime() > now) return false;
+  if (c.valid_until && new Date(c.valid_until).getTime() < now) return false;
+  return true;
+}
+function couponValidityText(c) {
+  if (!c.valid_from && !c.valid_until) return t('coupon_no_limit');
+  const f = c.valid_from ? fmtDate(c.valid_from) : '—';
+  const u = c.valid_until ? fmtDate(c.valid_until) : '—';
+  return f + ' → ' + u;
+}
+function couponValidityTag(c) {
+  if (c.active === false) return t('coupon_inactive_tag');
+  if (c.valid_from && new Date(c.valid_from).getTime() > Date.now()) return t('coupon_upcoming');
+  if (c.valid_until && new Date(c.valid_until).getTime() < Date.now()) return t('coupon_expired_tag');
+  return t('coupon_active_tag');
+}
+// datetime-local gives Yangon wall time with no zone — treat it as Yangon
+// time (+06:30) and convert to an ISO instant for the server.
+function yangonInputToISO(v) {
+  if (!v) return null;
+  const d = new Date(String(v).trim() + ':00+06:30');
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 function cartTotal() { return Math.max(0, cartSubtotal() - couponDiscount()); }
 function updateCartBadge() {
@@ -1111,6 +1141,8 @@ async function applyCoupon() {
       saveCoupon();
       renderCart();
     } else if (res.reason === 'not_for_customer') fail('coupon_not_for_customer');
+    else if (res.reason === 'not_yet_valid') fail('coupon_not_yet_valid');
+    else if (res.reason === 'expired') fail('coupon_expired');
     else if (res.reason === 'no_eligible_items') fail('coupon_no_eligible_items');
     else fail('coupon_invalid');
   } catch (e) {
@@ -1131,8 +1163,9 @@ async function openCouponList() {
         ? fmt(c.value).replace(' Ks', '') + ' ' + t('amount_off')
         : c.value + t('percent_off');
       const scope = couponScopeText(c);
+      const untilLine = c.valid_until ? '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(fmtDate(c.valid_until)) + ' ' + esc(t('coupon_until')) + '</div>' : '';
       return '<div class="pay-account"><div class="pa-info"><div class="pa-method">' + esc(c.code) + '</div>' +
-        '<div class="pa-name">' + esc(val) + '</div><div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(scope) + '</div></div>' +
+        '<div class="pa-name">' + esc(val) + '</div><div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(scope) + '</div>' + untilLine + '</div>' +
         '<button type="button" class="copy-btn" data-use="' + esc(c.code) + '">' + esc(t('use_coupon')) + '</button></div>';
     }).join('');
     $$('[data-use]', body).forEach((b) => b.addEventListener('click', () => {
@@ -1926,7 +1959,7 @@ async function openAdminOrder(id) {
         try {
           const data = await api('/manage/coupons');
           const list = data.coupons || data.items || (Array.isArray(data) ? data : []);
-          const active = list.filter((c) => c.active !== false);
+          const active = list.filter((c) => couponIsUsableClient(c));
           couponSel.innerHTML = '<option value="">—</option>' + active.map((c) =>
             '<option value="' + esc(c.code) + '"' + (o.coupon_code === c.code ? ' selected' : '') + '>' + esc(c.code) + ' — ' + esc(c.type) + ' ' + esc(String(c.value)) + (c.type === 'percent' ? '%' : ' Ks') + '</option>').join('');
         } catch (e) { /* select stays empty */ }
@@ -2880,6 +2913,13 @@ async function renderManageCoupons(body) {
     '<input id="cpValue" type="number" min="0" placeholder="' + esc(t('coupon_value')) + '" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;width:110px">' +
     '<button class="btn btn-primary" type="button" id="cpAddBtn">' + esc(t('add')) + '</button>' +
     '</div>' +
+    '<div style="margin-top:14px;font-weight:700">' + esc(t('coupon_validity')) + '</div>' +
+    '<div class="row-flex" style="margin-top:6px">' +
+    '<label style="flex:1;min-width:160px"><span style="font-size:13px;color:var(--muted)">' + esc(t('coupon_valid_from')) + '</span>' +
+    '<input id="cpValidFrom" type="datetime-local" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;margin-top:4px"></label>' +
+    '<label style="flex:1;min-width:160px"><span style="font-size:13px;color:var(--muted)">' + esc(t('coupon_valid_until')) + '</span>' +
+    '<input id="cpValidUntil" type="datetime-local" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;margin-top:4px"></label></div>' +
+    '<div style="margin-top:4px;font-size:12px;color:var(--muted)">' + esc(t('coupon_validity_hint')) + '</div>' +
     '<div style="margin-top:14px;font-weight:700">' + esc(t('coupon_scope')) + '</div>' +
     '<div style="margin-top:8px;font-size:13px;color:var(--muted)">' + esc(t('scope_brands')) + '</div>' +
     '<div id="cpBrandChips" class="chips" style="margin-top:4px"></div>' +
@@ -2952,7 +2992,8 @@ async function renderManageCoupons(body) {
       listEl.innerHTML = list.map((c) =>
         '<div class="pay-account"><div class="pa-info"><div class="pa-method">' + esc(c.code) + '</div>' +
         '<div class="pa-name">' + esc(c.type) + ' — ' + esc(String(c.value)) + (c.type === 'percent' ? '%' : ' Ks') + '</div>' +
-        '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponScopeText(c)) + '</div></div>' +
+        '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponScopeText(c)) + '</div>' +
+        '<div class="pa-name" style="font-size:12px;color:var(--muted)">' + esc(couponValidityText(c)) + ' • ' + esc(couponValidityTag(c)) + '</div></div>' +
         '<button type="button" class="btn btn-danger mini" data-delcp="' + esc(c.code) + '">' + esc(t('del')) + '</button></div>').join('');
       $$('[data-delcp]', listEl).forEach((b) => b.addEventListener('click', async () => {
         if (!window.confirm(t('confirm_delete'))) return;
@@ -2969,8 +3010,8 @@ async function renderManageCoupons(body) {
     const value = Number($('#cpValue').value);
     if (!code || !value) { toast(t('fill_all')); return; }
     try {
-      await api('/manage/coupons', { method: 'POST', body: JSON.stringify({ code: code, type: type, value: value, brands: Array.from(selBrands), products: Array.from(selProducts.keys()), customers: Array.from(selCustomers) }) });
-      toast(t('saved')); $('#cpCode').value = ''; $('#cpValue').value = '';
+      await api('/manage/coupons', { method: 'POST', body: JSON.stringify({ code: code, type: type, value: value, valid_from: yangonInputToISO($('#cpValidFrom').value), valid_until: yangonInputToISO($('#cpValidUntil').value), brands: Array.from(selBrands), products: Array.from(selProducts.keys()), customers: Array.from(selCustomers) }) });
+      toast(t('saved')); $('#cpCode').value = ''; $('#cpValue').value = ''; $('#cpValidFrom').value = ''; $('#cpValidUntil').value = '';
       selBrands.clear(); selProducts.clear(); selCustomers.clear();
       $$('[data-cpbrand]', brandWrap).forEach((ch) => ch.classList.remove('active'));
       paintPicked();
