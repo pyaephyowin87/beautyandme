@@ -134,7 +134,8 @@ const I18N = {
     delivery_fee: 'ပို့ခ', pay_on_delivery: 'ပစ္စည်းရောက်မှ ပေးပါ',
     status: 'အခြေအနေ', date: 'ရက်စွဲ', items: 'ပစ္စည်းများ',
     status_pending: 'စောင့်ဆိုင်းနေတယ်', status_confirmed: 'အတည်ပြုပြီး', status_delivering: 'ပို့နေတယ်', status_delivered: 'ပို့ပြီးပြီ', status_cancelled: 'ပယ်ဖျက်ပြီး',
-    search_orders: 'အော်ဒါ နံပါတ် / နာမည် / ဖုန်း ရှာမယ်…', search_users: 'နာမည် / ဖုန်း ရှာမယ်…',
+    search_orders: 'အော်ဒါ နံပါတ် / POS voucher / နာမည် / ဖုန်း ရှာမယ်…', search_users: 'နာမည် / ဖုန်း ရှာမယ်…',
+    pos_voucher: 'POS voucher နံပါတ်', pos_voucher_hint: 'POS က ဖြတ်ထားတဲ့ voucher နံပါတ်', pos_voucher_missing: 'POS မဖြတ်ရသေးပါ', action_order_pos_voucher: 'POS voucher နံပါတ် ထည့်တယ်',
     all_statuses: 'Status အားလုံး', change_status: 'Status ပြောင်းမယ်', status_changed: 'Status ပြောင်းပြီးပါပြီ',
     screenshot: 'ငွေလွှဲ Screenshot', no_screenshot: 'Screenshot မရှိပါ',
     new_password: 'Password အသစ်', set_password: 'Password ချိန်းမယ်', password_changed: 'Password အသစ် ချိန်းပြီးပါပြီ — customer ကို အသစ်ကို ပြောပေးပါ',
@@ -299,7 +300,8 @@ const I18N = {
     delivery_fee: 'Delivery fee', pay_on_delivery: 'Pay on delivery',
     status: 'Status', date: 'Date', items: 'Items',
     status_pending: 'Pending', status_confirmed: 'Confirmed', status_delivering: 'Delivering', status_delivered: 'Delivered', status_cancelled: 'Cancelled',
-    search_orders: 'Search order no. / name / phone…', search_users: 'Search name / phone…',
+    search_orders: 'Search order no. / POS voucher / name / phone…', search_users: 'Search name / phone…',
+    pos_voucher: 'POS voucher no.', pos_voucher_hint: 'Voucher no. from the POS', pos_voucher_missing: 'POS not yet', action_order_pos_voucher: 'Set the POS voucher no.',
     all_statuses: 'All statuses', change_status: 'Change status', status_changed: 'Status updated',
     screenshot: 'Payment screenshot', no_screenshot: 'No screenshot',
     new_password: 'New password', set_password: 'Set password', password_changed: 'Password changed — tell the customer the new one',
@@ -1837,7 +1839,7 @@ async function loadMgOrders(reset) {
       '<button type="button" class="order-card" data-mgorder="' + esc(String(o.id)) + '">' +
       '<span class="oc-top"><span>' + esc(o.id) + '</span><span class="status-pill">' + esc(statusLabel(o.status)) + '</span></span>' +
       '<div class="oc-meta">' + esc(fmtDate(o.created_at)) + ' • ' + esc((o.customer && o.customer.name) || '') + ' • ' + esc((o.customer && o.customer.phone) || '') + '</div>' +
-      '<div class="oc-meta">' + esc(t('total')) + ': ' + fmt(o.total) + (o.payment && o.payment.method ? ' • ' + esc(t(o.payment.method)) : '') + (o.has_screenshot ? ' • ' + esc(t('screenshot')) : '') + '</div>' +
+      '<div class="oc-meta">' + esc(t('total')) + ': ' + fmt(o.total) + (o.payment && o.payment.method ? ' • ' + esc(t(o.payment.method)) : '') + (o.has_screenshot ? ' • ' + esc(t('screenshot')) : '') + ' • ' + (o.pos_voucher ? 'POS ' + esc(o.pos_voucher) : esc(t('pos_voucher_missing'))) + '</div>' +
       '</button>').join('');
     $$('[data-mgorder]', wrap).forEach((b) => b.addEventListener('click', () => openAdminOrder(b.dataset.mgorder)));
   } catch (e) {
@@ -1866,6 +1868,10 @@ async function openAdminOrder(id) {
         (c.address ? '<div class="line"><span>' + esc(t('address')) + '</span><span>' + esc(c.address) + '</span></div>' : '') : '') +
       (o.delivery && o.delivery.method ? '<div class="line"><span>' + esc(t('delivery')) + '</span><strong>' + esc(deliveryLabel(o.delivery.method)) + '</strong></div>' : '') +
       (pay.method ? '<div class="line"><span>' + esc(t('payment')) + '</span><span>' + esc(t(pay.method)) + (pay.account ? ' — ' + esc(pay.account) : '') + '</span></div>' : '') +
+      '<hr><div style="font-weight:700;margin-bottom:8px">' + esc(t('pos_voucher')) + '</div>' +
+      '<div class="row-flex"><input id="adminPosVoucher" type="text" placeholder="' + esc(t('pos_voucher_hint')) + '" value="' + esc(o.pos_voucher || '') + '" style="flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;min-width:140px">' +
+      '<button type="button" class="btn btn-primary" id="adminPosSave">' + esc(t('save')) + '</button></div>' +
+      '<div id="adminPosNote" style="margin-top:6px;font-size:13px;color:var(--muted)"></div>' +
       '<hr>' +
       items.map((it) => {
         const lineTotal = it.line_total != null ? it.line_total : (it.unit_price != null ? it.unit_price : (it.price || 0)) * (it.qty || 1);
@@ -1889,6 +1895,20 @@ async function openAdminOrder(id) {
       '<div class="row-flex" style="flex-wrap:wrap">' + ORDER_STATUSES.map((s) =>
         '<button type="button" class="btn ' + (o.status === s ? 'btn-primary' : 'btn-outline') + '" data-mgstatus="' + s + '">' + esc(statusLabel(s)) + '</button>').join('') + '</div>';
     if (o.has_screenshot) loadAdminScreenshot(o.id);
+    // POS voucher number (fix-batch-46): staff type the UltimatePOS
+    // voucher no. here; it is staff-only and activity-logged.
+    const posInput = $('#adminPosVoucher');
+    const posSaveBtn = $('#adminPosSave');
+    if (posSaveBtn) posSaveBtn.addEventListener('click', async () => {
+      const note = $('#adminPosNote');
+      try {
+        const res = await api('/manage/orders/' + encodeURIComponent(o.id) + '/pos-voucher', { method: 'PATCH', body: JSON.stringify({ pos_voucher: posInput ? posInput.value : '' }) });
+        o.pos_voucher = res.order ? res.order.pos_voucher : (posInput ? posInput.value.trim() : '');
+        if (note) note.textContent = t('saved');
+        toast(t('saved'));
+        loadMgOrders(true);
+      } catch (e) { if (note) note.textContent = t('error_load'); }
+    });
     const historyBtn = $('#adminHistoryBtn');
     if (historyBtn) historyBtn.addEventListener('click', () => {
       // Jump to the Activity log with this voucher no. already searched —
