@@ -833,9 +833,69 @@ function couponValidityState(coupon, nowMs) {
   }
   return 'active';
 }
-function couponIsUsable(coupon, nowMs) {
-  return couponValidityState(coupon, nowMs) === 'active';
+// Coupon usage (fix-batch-48): how many non-cancelled orders used a coupon
+// code, and how much discount those orders got. Cancelled orders never
+// consume a usage-limit slot — the sale never happened. excludeOrderId lets
+// admin-apply re-check an order without counting the order itself.
+async function couponUsageStats(code, excludeOrderId) {
+  const orders = await store.listOrders();
+  let count = 0;
+  let totalDiscount = 0;
+  for (const o of orders || []) {
+    if (o && o.coupon_code === code && o.status !== 'cancelled' && o.id !== excludeOrderId) {
+      count += 1;
+      totalDiscount += Number(o.discount) || 0;
+    }
+  }
+  return { count, totalDiscount };
 }
+// A customer is "new" when their phone has no non-cancelled order yet
+// (a cancelled-only history still counts as new — they never bought).
+async function isNewCustomer(phone, excludeOrderId) {
+  const norm = normalizePhone(phone || '');
+  if (!norm) return false;
+  const orders = await store.listOrders();
+  for (const o of orders || []) {
+    if (o && o.id !== excludeOrderId && o.status !== 'cancelled' && o.customer && normalizePhone(o.customer.phone || '') === norm) return false;
+  }
+  return true;
+}
+// Full usability check incl. the usage limit (fix-batch-48); every money
+// path uses the async refusal check below so a limit can never be overshot.
+async function couponIsUsableAsync(coupon, nowMs, excludeOrderId) {
+  if (couponValidityState(coupon, nowMs) !== 'active') return false;
+  if (coupon && coupon.usage_limit != null) {
+    const { count } = await couponUsageStats(coupon.code, excludeOrderId);
+    if (count >= coupon.usage_limit) return false;
+  }
+  return true;
+}
+// One shared refusal check for every money path (fix-batch-48): returns null
+// when the coupon may be used, else a validate-style reason code. Validate
+// returns the reason to the customer; order placement maps any reason to
+// invalid_coupon; admin apply maps it via ADMIN_COUPON_ERRORS.
+async function couponRefusalReason(coupon, phone, excludeOrderId) {
+  if (!coupon || coupon.active === false) return 'not_found';
+  const vstate = couponValidityState(coupon);
+  if (vstate === 'upcoming') return 'not_yet_valid';
+  if (vstate === 'expired') return 'expired';
+  if (coupon.usage_limit != null) {
+    const { count } = await couponUsageStats(coupon.code, excludeOrderId);
+    if (count >= coupon.usage_limit) return 'limit_reached';
+  }
+  if (!couponCustomerEligible(coupon, phone)) return 'not_for_customer';
+  if (coupon.new_customer_only) {
+    if (!phone) return 'phone_required';
+    if (!(await isNewCustomer(phone, excludeOrderId))) return 'not_new_customer';
+  }
+  return null;
+}
+const ADMIN_COUPON_ERRORS = {
+  not_yet_valid: 'coupon_not_yet_valid',
+  expired: 'coupon_expired',
+  limit_reached: 'coupon_limit_reached',
+  not_new_customer: 'coupon_not_new_customer',
+};
 // Attach resolved product names to coupons (for display only).
 async function withCouponProductNames(list) {
   for (const c of list || []) {
@@ -943,20 +1003,31 @@ app.post('/api/notifications/read-all', authMiddleware, async (req, res, next) =
 // Public coupon list — only active coupons, only what a customer needs
 // to pick one (code + value). Private/expired coupons never appear here.
 // Customer phone lists are NEVER sent to customers — only a flag.
-app.get('/api/coupons', async (_req, res, next) => {
+app.get('/api/coupons', async (req, res, next) => {
   try {
     const all = await store.listCoupons();
-    // Customers see ONLY currently usable coupons — expired, upcoming and
-    // inactive ones never appear here (fix-batch-47).
-    const active = all.filter((c) => couponIsUsable(c)).map((c) => ({
-      code: c.code, type: c.type || 'percent', value: c.value,
-      valid_until: c.valid_until || null,
-      brands: Array.isArray(c.brands) ? c.brands : [],
-      products: Array.isArray(c.products) ? c.products : [],
-      customers_only: Array.isArray(c.customers) && c.customers.length > 0,
-    }));
-    await withCouponProductNames(active);
-    return res.json(active);
+    const phone = typeof req.query.phone === 'string' ? req.query.phone.trim() : '';
+    // Customers see ONLY currently usable coupons — expired, upcoming,
+    // inactive and limit-reached ones never appear here (fix-batch-47/48).
+    // When the caller's phone is known, new-customer coupons are hidden
+    // from existing customers; without a phone they stay visible (labelled)
+    // and validate enforces at apply time.
+    const list = [];
+    for (const c of all) {
+      if (!(await couponIsUsableAsync(c))) continue;
+      if (c.new_customer_only && phone && !(await isNewCustomer(phone))) continue;
+      list.push({
+        code: c.code, type: c.type || 'percent', value: c.value,
+        valid_until: c.valid_until || null,
+        usage_limit: c.usage_limit != null ? c.usage_limit : null,
+        new_customer_only: !!c.new_customer_only,
+        brands: Array.isArray(c.brands) ? c.brands : [],
+        products: Array.isArray(c.products) ? c.products : [],
+        customers_only: Array.isArray(c.customers) && c.customers.length > 0,
+      });
+    }
+    await withCouponProductNames(list);
+    return res.json(list);
   } catch (err) { return next(err); }
 });
 
@@ -964,11 +1035,8 @@ app.post('/api/coupons/validate', async (req, res, next) => {
   try {
     const { code, items, phone } = req.body || {};
     const coupon = await store.getCoupon(code);
-    if (!coupon || coupon.active === false) return res.json({ valid: false, reason: 'not_found' });
-    const vstate = couponValidityState(coupon);
-    if (vstate === 'upcoming') return res.json({ valid: false, reason: 'not_yet_valid' });
-    if (vstate === 'expired') return res.json({ valid: false, reason: 'expired' });
-    if (!couponCustomerEligible(coupon, phone)) return res.json({ valid: false, reason: 'not_for_customer' });
+    const reason = await couponRefusalReason(coupon, phone);
+    if (reason) return res.json({ valid: false, reason });
     const scoped = (Array.isArray(coupon.brands) && coupon.brands.length > 0)
       || (Array.isArray(coupon.products) && coupon.products.length > 0);
     // Resolve the cart against server-side products/prices. Never trust
@@ -1141,8 +1209,7 @@ app.post('/api/orders', optionalAuth, async (req, res, next) => {
     let coupon = null;
     if (coupon_code) {
       coupon = await store.getCoupon(coupon_code);
-      if (!coupon || !couponIsUsable(coupon)) return res.status(400).json({ error: 'invalid_coupon' });
-      if (!couponCustomerEligible(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
+      if (await couponRefusalReason(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
       const calcItems = orderItems.map((oi, i) => ({ unit_price: oi.unit_price, qty: oi.qty, product: loadedProducts[i] }));
       discount = couponDiscountFor(coupon, calcItems).discount;
       discount = Math.min(discount, subtotal);
@@ -1626,9 +1693,9 @@ app.patch('/api/manage/orders/:id/coupon', authMiddleware, orderStaffMiddleware,
       return res.json({ order: adminOrderShape(order), old_total: oldTotal, new_total: order.total });
     }
     const coupon = await store.getCoupon(code);
-    if (!coupon || !couponIsUsable(coupon)) return res.status(400).json({ error: 'invalid_coupon' });
     const custPhone = order.customer && order.customer.phone ? normalizePhone(order.customer.phone) : '';
-    if (!couponCustomerEligible(coupon, custPhone)) return res.status(400).json({ error: 'invalid_coupon' });
+    const reason = await couponRefusalReason(coupon, custPhone, order.id);
+    if (reason) return res.status(400).json({ error: ADMIN_COUPON_ERRORS[reason] || 'invalid_coupon' });
     const products = await store.listProducts();
     const byId = new Map(products.map((p) => [p.id, p]));
     const calcItems = (order.items || []).map((oi) => ({ unit_price: oi.unit_price, qty: oi.qty, product: byId.get(oi.product_id) }));
@@ -2254,32 +2321,65 @@ app.get('/api/manage/coupons', authMiddleware, managerMiddleware, async (_req, r
   try {
     const list = await store.listCoupons();
     await withCouponProductNames(list);
+    // Attach usage stats (fix-batch-48): non-cancelled orders per coupon.
+    const orders = await store.listOrders();
+    const byCode = new Map();
+    for (const o of orders || []) {
+      if (o && o.coupon_code && o.status !== 'cancelled') {
+        const s = byCode.get(o.coupon_code) || { count: 0, totalDiscount: 0 };
+        s.count += 1;
+        s.totalDiscount += Number(o.discount) || 0;
+        byCode.set(o.coupon_code, s);
+      }
+    }
+    for (const c of list) {
+      const s = byCode.get(c.code) || { count: 0, totalDiscount: 0 };
+      c.usage_count = s.count;
+      c.total_discount = s.totalDiscount;
+    }
     return res.json(list);
   } catch (err) { return next(err); }
 });
 
+// Shared coupon field parsing for create (POST) and edit (PUT) — one
+// validation path so the two endpoints can never disagree (fix-batch-48).
+// Returns { fields } or { error } (a validate-style error code).
+function parseCouponBody(body) {
+  const { type = 'percent', value, note = '', active = true, brands, products, customers, valid_from, valid_until, usage_limit, new_customer_only } = body || {};
+  if (typeof value !== 'number') return { error: 'code_and_value_required' };
+  const cleanArr = (v) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []);
+  const cleanDate = (v) => {
+    if (v == null || String(v).trim() === '') return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  };
+  const fromISO = cleanDate(valid_from);
+  const untilISO = cleanDate(valid_until);
+  if (fromISO === undefined || untilISO === undefined) return { error: 'invalid_date' };
+  if (fromISO && untilISO && fromISO > untilISO) return { error: 'invalid_date_range' };
+  let limit = null;
+  if (usage_limit != null && String(usage_limit).trim() !== '') {
+    limit = Number(usage_limit);
+    if (!Number.isInteger(limit) || limit < 1) return { error: 'invalid_usage_limit' };
+  }
+  return { fields: {
+    type, value, note, active: Boolean(active),
+    valid_from: fromISO, valid_until: untilISO,
+    usage_limit: limit, new_customer_only: Boolean(new_customer_only),
+    brands: cleanArr(brands),
+    products: cleanArr(products),
+    // Customer scope is stored as normalised phones; invalid ones are dropped.
+    customers: cleanArr(customers).map((p) => normalizePhone(p)).filter((p) => isValidMyanmarPhone(p)),
+  } };
+}
+
 app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
-    const { code, type = 'percent', value, note = '', active = true, brands, products, customers, valid_from, valid_until } = req.body || {};
-    if (!code || typeof value !== 'number') return res.status(400).json({ error: 'code_and_value_required' });
-    const cleanArr = (v) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []);
-    const cleanDate = (v) => {
-      if (v == null || String(v).trim() === '') return null;
-      const d = new Date(v);
-      return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-    };
-    const fromISO = cleanDate(valid_from);
-    const untilISO = cleanDate(valid_until);
-    if (fromISO === undefined || untilISO === undefined) return res.status(400).json({ error: 'invalid_date' });
-    if (fromISO && untilISO && fromISO > untilISO) return res.status(400).json({ error: 'invalid_date_range' });
-    const coupon = {
-      code: String(code).toUpperCase(), type, value, note, active: Boolean(active),
-      valid_from: fromISO, valid_until: untilISO,
-      brands: cleanArr(brands),
-      products: cleanArr(products),
-      // Customer scope is stored as normalised phones; invalid ones are dropped.
-      customers: cleanArr(customers).map((p) => normalizePhone(p)).filter((p) => isValidMyanmarPhone(p)),
-    };
+    const { code } = req.body || {};
+    if (!code) return res.status(400).json({ error: 'code_and_value_required' });
+    const parsed = parseCouponBody(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const coupon = { code: String(code).toUpperCase(), ...parsed.fields };
     await store.saveCoupon(coupon);
     const scopeBits = [];
     if (coupon.brands.length) scopeBits.push('brands: ' + coupon.brands.join(', '));
@@ -2289,8 +2389,24 @@ app.post('/api/manage/coupons', authMiddleware, managerMiddleware, async (req, r
       const ygDate = (iso) => new Date(new Date(iso).getTime() + YANGON_OFFSET_MS).toISOString().slice(0, 10);
       scopeBits.push(`valid ${coupon.valid_from ? ygDate(coupon.valid_from) : '—'} → ${coupon.valid_until ? ygDate(coupon.valid_until) : '—'}`);
     }
+    if (coupon.usage_limit != null) scopeBits.push(`limit ${coupon.usage_limit}`);
+    if (coupon.new_customer_only) scopeBits.push('new customers only');
     await logActivity(req, 'coupon_create', 'coupon', coupon.code, `${coupon.type} ${coupon.value}${coupon.type === 'percent' ? '%' : ' Ks'}${scopeBits.length ? ' — ' + scopeBits.join('; ') : ''}`);
     return res.status(201).json(coupon);
+  } catch (err) { return next(err); }
+});
+
+app.put('/api/manage/coupons/:code', authMiddleware, managerMiddleware, async (req, res, next) => {
+  try {
+    const code = String(req.params.code || '').toUpperCase();
+    const existing = await store.getCoupon(code);
+    if (!existing) return res.status(404).json({ error: 'coupon_not_found' });
+    const parsed = parseCouponBody(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const coupon = { code, ...parsed.fields };
+    await store.saveCoupon(coupon);
+    await logActivity(req, 'coupon_update', 'coupon', code, `${coupon.type} ${coupon.value}${coupon.type === 'percent' ? '%' : ' Ks'}`);
+    return res.json(coupon);
   } catch (err) { return next(err); }
 });
 
