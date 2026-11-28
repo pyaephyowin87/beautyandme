@@ -50,7 +50,6 @@ const I18N = {
     cart: 'ခြင်းတောင်း', login: 'အကောင့် ဝင်မယ်', logout: 'ထွက်မယ်', account: 'အကောင့်',
     hero_tag: 'အလှအပ ပစ္စည်းများ — စိတ်ချယုံကြည်ရသော K-Beauty ဆိုင်',
     hero_banner: 'Hero banner ပုံ', hero_banner_hint: 'Home အပေါ်ဆုံး box မှာ ပြမယ့် ပုံ — promotion ပုံ တင်လို့ရတယ်။ ပုံ မရှိရင် စာပဲ ပြမယ်။', hero_upload: 'ပုံ တင်မယ်', hero_change: 'ပုံ ပြောင်းမယ်', hero_remove: 'ပုံ ဖြုတ်မယ်', hero_no_image: 'ပုံ မရှိသေးပါ', hero_saved: 'သိမ်းပြီးပါပြီ',
-    msg_fallback: 'Messenger app မဖွင့်နိုင်ပါ — web ကနေ ဆက်သွယ်မလား?', msg_fallback_open: 'ဖွင့်မယ်',
     best: 'အရောင်းရဆုံး', sale: 'လျှော့ဈေး', new: 'ပစ္စည်းအသစ်', all: 'ပစ္စည်းအားလုံး',
     view_all: 'အားလုံးကြည့်မယ်', more: 'နောက်ထပ် ပြမယ်',
     in_stock: 'Stock ရှိပါတယ်', out_stock: 'ကုန်ပြီ',
@@ -216,7 +215,6 @@ const I18N = {
     cart: 'Cart', login: 'Log in', logout: 'Log out', account: 'Account',
     hero_tag: 'Trusted K-Beauty shop — beauty products you can rely on',
     hero_banner: 'Hero banner image', hero_banner_hint: 'Image shown in the top box on Home — use it for promotions. Without an image, the text shows instead.', hero_upload: 'Upload image', hero_change: 'Change image', hero_remove: 'Remove image', hero_no_image: 'No image yet', hero_saved: 'Saved',
-    msg_fallback: 'Could not open the Messenger app — chat on the web instead?', msg_fallback_open: 'Open',
     best: 'Best Sellers', sale: 'Sale', new: 'New Arrivals', all: 'All Products',
     view_all: 'View all', more: 'Show more',
     in_stock: 'In Stock', out_stock: 'Sold Out',
@@ -570,16 +568,19 @@ function appLinkUrl(kind) {
 // History: the first version set window.location.href to the deep link and
 // fell back with window.location.href = m.me — on iOS the fallback fired
 // while Safari was still visible and the SHOP TAB itself navigated to
-// messenger.com. Fix-batch-45 tried a hidden iframe + blank tab, but that
-// broke the other way: iOS Safari never fires a custom scheme from a
-// display:none iframe, and window.close() does nothing on iOS, so the user
-// was left staring at a stuck about:blank tab and the app never opened.
-// Fix-batch-45b (current): fire the deep link with window.location.href
-// again (proven to open the app — the OS intercepts the scheme, the shop
-// tab stays put), and the fallback only ever opens a NEW tab. If the popup
-// blocker stops that, show a small banner with a real button instead —
-// a tap on it is a genuine gesture, so it always works. The shop tab is
-// never navigated away from, in any branch.
+// messenger.com. Fix-batch-45 tried a hidden iframe + blank tab, but iOS
+// Safari never fires a custom scheme from a display:none iframe, and
+// window.close() does nothing on iOS, so the user was left staring at a
+// stuck about:blank tab. Fix-batch-45b went back to window.location.href
+// = deepLink (proven to open the app) with a 2000ms new-tab fallback plus
+// a "Could not open" banner when the popup blocker stopped it — the app
+// opened directly, but the banner still appeared as a FALSE POSITIVE when
+// the app switch took longer than 2s, and Pyae found it messy (2026-11-28
+// 11:06). Fix-batch-45c (current): the banner is REMOVED — the fallback
+// only ever opens a new tab, and the wait is 3500ms so a slow app switch
+// (cold start) does not trigger it. If the popup blocker stops the
+// fallback, nothing visible happens at all — the shop tab is never
+// navigated away from, in any branch.
 function openMessenger(ev) {
   if (ev) ev.preventDefault();
   const webUrl = (state.shopInfo && state.shopInfo.messenger_url) || 'https://m.me/beautyandme117';
@@ -589,39 +590,14 @@ function openMessenger(ev) {
   // via the Browser plugin, so the app itself never navigates away.
   if (capBrowser && capBrowser.open) {
     window.location.href = deepLink;
-    setTimeout(() => { if (!document.hidden) capBrowser.open({ url: webUrl }); }, 2000);
+    setTimeout(() => { if (!document.hidden) capBrowser.open({ url: webUrl }); }, 3500);
     return;
   }
   window.location.href = deepLink;
   setTimeout(() => {
     if (document.hidden) return; // app opened — nothing more to do
-    let w = null;
-    try { w = window.open(webUrl, '_blank', 'noopener'); } catch (e) { w = null; }
-    if (!w) showMsgFallback(webUrl);
-  }, 2000);
-}
-// Shown only when the Messenger app did not open AND the popup blocker
-// stopped the automatic web fallback. The button is a real tap, so it
-// always opens the web chat in a new tab.
-let msgFallbackWired = false;
-let msgFallbackUrl = '';
-function showMsgFallback(webUrl) {
-  const box = $('#msgFallback');
-  if (!box) return;
-  msgFallbackUrl = webUrl;
-  $('#msgFallbackText').textContent = t('msg_fallback');
-  $('#msgFallbackOpen').textContent = t('msg_fallback_open');
-  box.hidden = false;
-  clearTimeout(showMsgFallback._t);
-  showMsgFallback._t = setTimeout(() => { box.hidden = true; }, 10000);
-  if (!msgFallbackWired) {
-    msgFallbackWired = true;
-    $('#msgFallbackOpen').addEventListener('click', () => {
-      if (msgFallbackUrl) window.open(msgFallbackUrl, '_blank', 'noopener');
-      box.hidden = true;
-    });
-    $('#msgFallbackClose').addEventListener('click', () => { box.hidden = true; });
-  }
+    try { window.open(webUrl, '_blank', 'noopener'); } catch (e) {}
+  }, 3500);
 }
 function onAppButton(kind) {
   const url = appLinkUrl(kind);
