@@ -865,6 +865,36 @@ function isVipActive(user, nowMs) {
   if (!user || !user.is_vip || !user.vip_until) return false;
   return Date.parse(user.vip_until) > (nowMs || Date.now());
 }
+// VIP member code (fix-batch-58): one short code per VIP customer —
+// VIP-001, VIP-002, ... — auto-assigned when VIP is granted, kept for
+// life (revoke + re-grant keeps the same code, never reused). Staff write
+// it on the POS voucher so an in-store VIP discount can be matched back
+// to the website customer by code instead of by (possibly shared or
+// misspelled) name. The same code becomes the lookup key in the future
+// new POS, like the SKU/barcode is the product identity.
+function nextVipCode(users) {
+  let max = 0;
+  for (const u of users || []) {
+    const m = String(u.vip_code || '').match(/^VIP-(\d+)$/);
+    if (m) max = Math.max(max, Number(m[1]) || 0);
+  }
+  return 'VIP-' + String(max + 1).padStart(3, '0');
+}
+// Give every VIP without a code the next free one, earliest expiry first
+// (so the longest-standing VIPs get the lowest numbers). Runs once at
+// boot — They Htar, the first VIP, becomes VIP-001.
+async function backfillVipCodes() {
+  try {
+    const users = await store.listUsers();
+    const needy = users.filter((u) => u.is_vip && !u.vip_code)
+      .sort((a, b) => Date.parse(a.vip_until || 0) - Date.parse(b.vip_until || 0) || String(a.phone || '').localeCompare(String(b.phone || '')));
+    for (const u of needy) {
+      u.vip_code = nextVipCode(await store.listUsers());
+      await store.saveUser(u);
+      console.log(`[vip] backfilled ${u.vip_code} for ${u.phone}`);
+    }
+  } catch (e) { console.error('[vip] backfill failed:', e.message); }
+}
 function vipBirthdayThisMonth(user, nowMs) {
   if (!user || !user.vip_birthday) return false;
   const m = String(user.vip_birthday).match(/^\d{4}-(\d{2})-\d{2}$/);
@@ -1204,6 +1234,7 @@ app.get('/api/vip', authMiddleware, async (req, res, next) => {
     return res.json({
       is_vip: isVipActive(u),
       vip_until: u.vip_until || null,
+      vip_code: u.vip_code || null,
       vip_birthday: u.vip_birthday || null,
       birthday_month: vipBirthdayThisMonth(u),
       tiers: settings.tiers,
@@ -2056,7 +2087,7 @@ app.get('/api/images/:id', async (req, res, next) => {
 
 app.get('/api/manage/users', authMiddleware, managerMiddleware, async (req, res, next) => {
   try {
-    const { q = '' } = req.query;
+    const { q = '', vip = '' } = req.query;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const extraManagers = (await store.getSetting('managers')) || [];
@@ -2084,15 +2115,30 @@ app.get('/api/manage/users', authMiddleware, managerMiddleware, async (req, res,
       lifetime_total: lifetimeTotal[u.phone] || 0,
       is_vip: !!u.is_vip,
       vip_until: u.vip_until || null,
+      vip_code: u.vip_code || null,
       vip_birthday: u.vip_birthday || null,
       created_at: u.created_at || null,
     }));
-    list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    // VIP filter (fix-batch-58): 'vip' = active VIPs only, 'expiring' =
+    // active VIPs whose card ends within 30 days — the admin calls them
+    // before expiry for renewal marketing. VIP lists sort by nearest
+    // expiry first so the most urgent call is at the top.
+    if (vip === 'vip' || vip === 'expiring') {
+      const now = Date.now();
+      list = list.filter((u) => u.is_vip && u.vip_until && Date.parse(u.vip_until) > now);
+      if (vip === 'expiring') {
+        list = list.filter((u) => Math.ceil((Date.parse(u.vip_until) - now) / 86400000) <= 30);
+      }
+      list.sort((a, b) => Date.parse(a.vip_until || 0) - Date.parse(b.vip_until || 0));
+    } else {
+      list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    }
     if (q) {
       const needle = String(q).toLowerCase();
       list = list.filter((u) =>
         String(u.name || '').toLowerCase().includes(needle) ||
-        String(u.phone || '').includes(needle));
+        String(u.phone || '').includes(needle) ||
+        String(u.vip_code || '').toLowerCase().includes(needle));
     }
     const total = list.length;
     return res.json({ users: list.slice(offset, offset + limit), total });
@@ -2148,15 +2194,20 @@ app.patch('/api/manage/users/:phone/vip', authMiddleware, managerMiddleware, asy
       if (user.is_vip && !isVipActive(user)) {
         user.vip_until = addMonthsISO(new Date().toISOString(), settings.validity_months);
       }
+      // First grant (or a VIP from before codes existed) gets the next
+      // free VIP code — kept for life, even across revoke + re-grant.
+      if (user.is_vip && !user.vip_code) {
+        user.vip_code = nextVipCode(await store.listUsers());
+      }
     }
     await store.saveUser(user);
     if (user.is_vip && !wasActive) {
-      await createInboxRow(phone, 'vip_granted', 'VIP Member ဖြစ်သွားပါပြီ 🎉', `Beauty & Me VIP Card ရသွားပါပြီ — ဝယ်တိုင်း လျှော့ဈေး ရပါတယ်။ သက်တမ်း: ${user.vip_until ? user.vip_until.slice(0, 10) : '—'} အထိ။`, null);
-      await logActivity(req, 'vip_grant', 'user', phone, `${user.name || phone} — VIP until ${user.vip_until ? user.vip_until.slice(0, 10) : '—'}`);
+      await createInboxRow(phone, 'vip_granted', 'VIP Member ဖြစ်သွားပါပြီ 🎉', `Beauty & Me VIP Card ရသွားပါပြီ — ဝယ်တိုင်း လျှော့ဈေး ရပါတယ်။ VIP Code: ${user.vip_code || '—'}။ သက်တမ်း: ${user.vip_until ? user.vip_until.slice(0, 10) : '—'} အထိ။`, null);
+      await logActivity(req, 'vip_grant', 'user', phone, `${user.name || phone} — VIP ${user.vip_code || ''} until ${user.vip_until ? user.vip_until.slice(0, 10) : '—'}`);
     } else if (!user.is_vip && wasActive) {
       await logActivity(req, 'vip_revoke', 'user', phone, `${user.name || phone} — VIP revoked`);
     }
-    return res.json({ phone: user.phone, is_vip: !!user.is_vip, vip_until: user.vip_until || null, vip_birthday: user.vip_birthday || null });
+    return res.json({ phone: user.phone, is_vip: !!user.is_vip, vip_until: user.vip_until || null, vip_code: user.vip_code || null, vip_birthday: user.vip_birthday || null });
   } catch (err) { return next(err); }
 });
 // Extend a VIP card by one validity period (admin only, manual). Extending
@@ -2174,7 +2225,7 @@ app.post('/api/manage/users/:phone/vip-extend', authMiddleware, managerMiddlewar
     await store.saveUser(user);
     await createInboxRow(phone, 'vip_renewed', 'VIP သက်တမ်း တိုးသွားပါပြီ 🎉', `Beauty & Me VIP Card သက်တမ်း ${user.vip_until.slice(0, 10)} အထိ တိုးသွားပါပြီ။`, null);
     await logActivity(req, 'vip_extend', 'user', phone, `${user.name || phone} — VIP until ${user.vip_until.slice(0, 10)}`);
-    return res.json({ phone: user.phone, is_vip: true, vip_until: user.vip_until, vip_birthday: user.vip_birthday || null });
+    return res.json({ phone: user.phone, is_vip: true, vip_until: user.vip_until, vip_code: user.vip_code || null, vip_birthday: user.vip_birthday || null });
   } catch (err) { return next(err); }
 });
 
@@ -3327,7 +3378,10 @@ app.use((err, _req, res, _next) => {
 });
 
 store.init()
-  .then(() => {
+  .then(async () => {
+    // Fix-batch-58: VIPs granted before member codes existed get one
+    // now (earliest expiry first — They Htar becomes VIP-001).
+    await backfillVipCodes();
     if (!mailer.isMailConfigured()) {
       console.log(`[mailer] WARNING: password-reset email is NOT configured (${mailer.mailerStatus()}) — set GMAIL_APP_PASSWORD + MAIL_FROM_EMAIL in Render env; reset links will only be logged until then`);
     }
